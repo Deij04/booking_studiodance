@@ -31,6 +31,7 @@ Route::middleware(['auth', 'can:access-admin'])->prefix('admin')->name('admin.')
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::resource('bookings', BookingController::class)->only(['index', 'create', 'store', 'edit', 'update']);
     Route::patch('bookings/{booking}/decision', [BookingController::class, 'decide'])->name('bookings.decide');
+    Route::get('bookings/{booking}/payment-proof', [BookingController::class, 'paymentProof'])->name('bookings.payment-proof');
     Route::resource('users', UserController::class)->except('show');
     Route::resource('studios', StudioController::class)->except('show');
     Route::resource('dance-classes', DanceClassController::class)

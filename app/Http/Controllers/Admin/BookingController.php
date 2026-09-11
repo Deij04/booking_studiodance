@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -76,6 +77,7 @@ class BookingController extends Controller
             'start_time' => ['required', 'date_format:H:i'],
             'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
             'purpose' => ['nullable', 'string', 'max:255'],
+            'payment_proof' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
             'payment_status' => ['required', Rule::in(array_keys(Reservation::PAYMENT_STATUSES))],
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
@@ -84,7 +86,7 @@ class BookingController extends Controller
         if ($start->isPast()) {
             throw ValidationException::withMessages(['start_time' => 'Jam mulai booking harus di masa mendatang.']);
         }
-        DB::transaction(function () use ($data, $start, $end) {
+        $this->saveWithProof($request, function ($proof) use ($data, $start, $end) {
             $studio = Studio::whereKey($data['studio_id'])->where('status', 'active')->lockForUpdate()->first();
             if (! $studio) {
                 throw ValidationException::withMessages(['studio_id' => 'Studio sudah tidak tersedia.']);
@@ -109,6 +111,7 @@ class BookingController extends Controller
                 'user_id' => $data['user_id'], 'studio_schedule_id' => $schedule->id,
                 'purpose' => $data['purpose'] ?? null, 'notes' => $data['notes'] ?? null,
                 'total_price' => $price, 'payment_status' => $data['payment_status'], 'status' => 'confirmed',
+                'payment_proof' => $proof,
             ]);
         });
 
@@ -149,12 +152,14 @@ class BookingController extends Controller
     public function update(Request $request, Reservation $booking): RedirectResponse
     {
         $data = $request->validate([
+            'payment_proof' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
             'status' => ['required', Rule::in(array_keys(Reservation::STATUSES))],
             'payment_status' => ['required', Rule::in(array_keys(Reservation::PAYMENT_STATUSES))],
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
 
-        DB::transaction(function () use ($booking, $data) {
+        unset($data['payment_proof']);
+        $this->saveWithProof($request, function ($proof) use ($booking, $data) {
             $booking = Reservation::whereKey($booking->id)->lockForUpdate()->firstOrFail();
             $schedule = StudioSchedule::whereKey($booking->studio_schedule_id)->lockForUpdate()->firstOrFail();
             if ($booking->status === 'confirmed' && $data['status'] === 'pending') {
@@ -169,12 +174,46 @@ class BookingController extends Controller
             if ($data['status'] !== 'cancelled' && $schedule->status === 'blocked') {
                 throw ValidationException::withMessages(['status' => 'Jadwal studio sedang diblokir.']);
             }
+            $oldProof = $booking->payment_proof;
+            if ($proof) {
+                $data['payment_proof'] = $proof;
+            }
             $booking->update($data);
             if ($schedule->status !== 'blocked') {
                 $schedule->update(['status' => $data['status'] === 'cancelled' ? 'available' : 'booked']);
             }
+
+            return $proof ? $oldProof : null;
         });
 
         return to_route('admin.bookings.index')->with('success', 'Booking berhasil diperbarui.');
+    }
+
+    public function paymentProof(Reservation $booking)
+    {
+        $path = $booking->payment_proof;
+        abort_unless($path && str_starts_with($path, 'payment-proofs/') && ! str_contains($path, '..'), 404);
+        abort_unless(Storage::disk('local')->exists($path), 404);
+
+        return Storage::disk('local')->response($path, null, [
+            'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    private function saveWithProof(Request $request, \Closure $save): void
+    {
+        $path = $request->file('payment_proof')?->store('payment-proofs', 'local');
+        abort_if($path === false, 500, 'Bukti transfer gagal disimpan.');
+        try {
+            $oldPath = DB::transaction(fn () => $save($path));
+        } catch (\Throwable $exception) {
+            if ($path) {
+                Storage::disk('local')->delete($path);
+            }
+            throw $exception;
+        }
+        if ($oldPath && str_starts_with($oldPath, 'payment-proofs/') && ! str_contains($oldPath, '..')) {
+            Storage::disk('local')->delete($oldPath);
+        }
     }
 }

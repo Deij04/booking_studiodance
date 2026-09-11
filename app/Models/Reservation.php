@@ -20,6 +20,7 @@ class Reservation extends Model
         'purpose',
         'total_price',
         'payment_status',
+        'payment_proof',
         'status',
         'notes',
     ];

@@ -3,7 +3,7 @@
 @section('content')
     <div class="mx-auto max-w-4xl space-y-6 p-4 sm:p-7 lg:p-10">
         <div><h2 class="text-2xl font-bold">Tambah Booking</h2><p class="mt-2 text-sm text-white/50">Buat booking untuk pelanggan. Booking langsung dikonfirmasi dan masuk ke Booking Aktif.</p></div>
-        <form method="POST" action="{{ route('admin.bookings.store') }}" class="rounded-2xl border border-white/10 bg-[#171717] p-6">
+        <form method="POST" enctype="multipart/form-data" action="{{ route('admin.bookings.store') }}" class="rounded-2xl border border-white/10 bg-[#171717] p-6">
             @csrf
             @if($errors->any())<div role="alert" class="mb-6 rounded-xl bg-red-400/10 p-4 text-sm text-red-300">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
             @if($customers->isEmpty() || $studios->isEmpty())<p class="mb-6 text-sm text-amber-300">Tambahkan pelanggan aktif dan studio aktif terlebih dahulu sebelum membuat booking.</p>@endif
@@ -17,6 +17,7 @@
                 <div><label for="end_time" class="text-sm text-white/70">Jam selesai</label><input type="time" id="end_time" name="end_time" value="{{ old('end_time') }}" required class="{{ $inputClass }} [color-scheme:dark]"><p class="mt-2 text-xs text-white/45">Jam selesai harus setelah jam mulai pada hari yang sama.</p></div>
                 <div class="sm:col-span-2 rounded-xl bg-[#f2c83f]/10 p-4"><p class="text-xs text-white/60">Total biaya (tarif per jam × durasi)</p><p id="booking-price" aria-live="polite" class="mt-2 text-xl font-semibold text-[#f2c83f]">Pilih studio dan jam penggunaan</p></div>
                 <div class="sm:col-span-2"><label for="purpose" class="text-sm text-white/70">Keperluan</label><input id="purpose" name="purpose" value="{{ old('purpose') }}" maxlength="255" class="{{ $inputClass }}"></div>
+                @include('admin.bookings.payment-proof')
                 <div class="sm:col-span-2"><label for="notes" class="text-sm text-white/70">Catatan</label><textarea id="notes" name="notes" rows="3" maxlength="5000" class="{{ $inputClass }}">{{ old('notes') }}</textarea></div>
             </div>
             <div class="mt-6 flex justify-end gap-4 border-t border-white/10 pt-6"><a href="{{ route('admin.bookings.index', ['tab' => 'active']) }}" class="px-3 py-3 text-sm text-white/60">Batal</a><button type="submit" @disabled($customers->isEmpty() || $studios->isEmpty()) class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black disabled:opacity-40">Buat Booking</button></div>

@@ -8,6 +8,8 @@ use App\Models\Studio;
 use App\Models\StudioSchedule;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class BookingManagementTest extends TestCase
@@ -28,6 +30,44 @@ class BookingManagementTest extends TestCase
             'date' => today()->addDay()->toDateString(), 'start_time' => '10:00', 'end_time' => '11:30',
             'payment_status' => 'unpaid', 'purpose' => 'Latihan',
         ];
+    }
+
+    public function test_payment_proof_can_be_created_viewed_and_replaced_privately(): void
+    {
+        Storage::fake('local');
+        $this->actingAs(User::factory()->admin()->create());
+        $data = $this->createPayload();
+        $proof = fn () => UploadedFile::fake()->createWithContent('transfer.pdf', "%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF");
+        $this->post(route('admin.bookings.store'), $data + ['payment_proof' => $proof()])->assertSessionHasNoErrors();
+        $booking = Reservation::where('user_id', $data['user_id'])->sole();
+        $oldPath = $booking->payment_proof;
+        Storage::disk('local')->assertExists($oldPath);
+        $this->assertSame('unpaid', $booking->payment_status);
+        $this->get(route('admin.bookings.payment-proof', $booking))->assertOk();
+        $this->get(route('admin.bookings.edit', $booking))->assertOk()->assertSee('Lihat bukti transfer tersimpan');
+        $this->put(route('admin.bookings.update', $booking), ['status' => 'confirmed', 'payment_status' => 'unpaid'])->assertSessionHasNoErrors();
+        $this->assertSame($oldPath, $booking->fresh()->payment_proof);
+        $this->put(route('admin.bookings.update', $booking), ['status' => 'confirmed', 'payment_status' => 'unpaid', 'payment_proof' => $proof()])->assertSessionHasNoErrors();
+        Storage::disk('local')->assertMissing($oldPath);
+        Storage::disk('local')->assertExists($booking->fresh()->payment_proof);
+        $this->actingAs(User::factory()->superAdmin()->create());
+        $this->get(route('admin.bookings.payment-proof', $booking))->assertOk();
+        $this->actingAs(User::find($data['user_id']));
+        $this->get(route('admin.bookings.payment-proof', $booking))->assertForbidden();
+    }
+
+    public function test_invalid_proofs_and_failed_updates_do_not_leave_files(): void
+    {
+        Storage::fake('local');
+        $this->actingAs(User::factory()->admin()->create());
+        $booking = Reservation::factory()->create();
+        foreach ([UploadedFile::fake()->create('file.txt', 10, 'text/plain'), UploadedFile::fake()->create('large.pdf', 2049, 'application/pdf')] as $file) {
+            $this->put(route('admin.bookings.update', $booking), ['status' => 'pending', 'payment_status' => 'unpaid', 'payment_proof' => $file])->assertSessionHasErrors('payment_proof');
+        }
+        $this->put(route('admin.bookings.update', $booking), ['status' => 'completed', 'payment_status' => 'unpaid', 'payment_proof' => UploadedFile::fake()->create('proof.pdf', 20, 'application/pdf')])->assertSessionHasErrors('payment_status');
+        $this->assertSame([], Storage::disk('local')->allFiles('payment-proofs'));
+        $this->assertNull($booking->fresh()->payment_proof);
+        $this->get(route('admin.bookings.payment-proof', $booking))->assertNotFound();
     }
 
     public function test_staff_create_confirmed_booking_with_server_calculated_price(): void
