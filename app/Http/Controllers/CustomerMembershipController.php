@@ -28,7 +28,7 @@ class CustomerMembershipController extends Controller
         ]);
         $enrollment->create($data + ['user_id' => $request->user()->id]);
 
-        return to_route('memberships.index')->with('success', 'Pengajuan membership terkirim. Silakan hubungi admin untuk pembayaran dan persetujuan.');
+        return to_route('memberships.index')->with('success', 'Your membership application has been submitted. Please contact our team for payment and approval.');
     }
 
     private function authorizeCustomer(Request $request): void

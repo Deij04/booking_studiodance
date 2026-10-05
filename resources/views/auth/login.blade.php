@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <link rel="icon" type="image/png" href="{{ asset('images/logoorange.png') }}">
@@ -102,7 +102,7 @@
         <section class="login-panel" aria-labelledby="login-title">
             <a class="back-link" href="{{ route('landing') }}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m12 5-7 7 7 7M5 12h14"/></svg>
-                Kembali ke Beranda
+                Back to Home
             </a>
             <div class="login-content">
                 <h1 id="login-title">LOGIN</h1>
@@ -119,14 +119,14 @@
                         <label for="password">Password</label>
                         <div class="input-wrap">
                             <input class="password-input" id="password" type="password" name="password" placeholder="*****" autocomplete="current-password" required>
-                            <button class="password-toggle" type="button" aria-label="Tampilkan password" aria-pressed="false">
+                            <button class="password-toggle" type="button" aria-label="Show password" aria-pressed="false">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2.5 12s3.5-5.5 9.5-5.5 9.5 5.5 9.5 5.5-3.5 5.5-9.5 5.5S2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>
                             </button>
                         </div>
                     </div>
                     <div class="forgot"><a href="#">Forgot Password</a></div>
                     <button class="submit-button" type="submit">Login</button>
-                    <p class="register">Dont have an account? <a href="{{ route('register') }}">Register</a></p>
+                    <p class="register">Don't have an account? <a href="{{ route('register') }}">Register</a></p>
                 </form>
             </div>
             <footer>&copy; 2026 ORANGEDANCEACADEMY . All rights reserved.</footer>
@@ -142,7 +142,7 @@
             const willShow = password.type === 'password';
             password.type = willShow ? 'text' : 'password';
             toggle.setAttribute('aria-pressed', String(willShow));
-            toggle.setAttribute('aria-label', willShow ? 'Sembunyikan password' : 'Tampilkan password');
+            toggle.setAttribute('aria-label', willShow ? 'Hide password' : 'Show password');
         });
     </script>
 </body>

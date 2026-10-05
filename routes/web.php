@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [LandingController::class, 'index'])->name('landing');
 Route::view('/about-us', 'user.about-us')->name('user.about');
+Route::get('/studios', [\App\Http\Controllers\User\StudioController::class, 'index'])->name('user.studios.index');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'create'])->name('login');

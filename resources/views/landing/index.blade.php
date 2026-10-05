@@ -24,11 +24,14 @@
         .landing-intro #studio .section-title .gold{color:#ffd000}
         .landing-intro #studio .sub{font-size:13px;margin-top:10px;margin-bottom:36px}
         #studio .studio-photo{overflow:hidden}
+        #studio .studio-image-unavailable{display:grid;place-items:center;min-height:220px;padding:20px;color:var(--muted);font-size:14px;text-align:center}
         #studio .studio-photo img{display:block;width:100%;height:220px;object-fit:cover}
         #studio .content-card{grid-template-columns:1fr;align-content:start}
         #studio .studio-empty{grid-column:1 / -1;text-align:center;color:var(--muted)}
         #studio .content-card>div{min-width:0;overflow-wrap:anywhere}
-        #studio .studio-see-more{display:block;margin:28px auto 0;padding:8px 18px;border:1px solid rgba(240,198,58,.45);border-radius:999px;background:transparent;color:var(--gold);font:600 12px Poppins,sans-serif;cursor:default}
+        #studio .studio-see-more{display:table;margin:28px auto 0;padding:8px 18px;border:1px solid rgba(240,198,58,.45);border-radius:999px;background:transparent;color:var(--gold);font:600 12px Poppins,sans-serif}
+        #studio .studio-see-more:hover{background:rgba(240,198,58,.12)}
+        #studio .studio-see-more:focus-visible{outline:2px solid var(--gold);outline-offset:4px}
         .availability-panel{max-width:940px;margin:0 auto;border-top:2px solid #9b811e;border-bottom:2px solid #9b811e;padding:30px 0}
         .availability-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
         .availability-heading h2{margin:0;color:#e8e8e8;font-size:clamp(20px,2vw,28px);font-weight:600;line-height:1.3}
@@ -138,15 +141,15 @@
         <div class="dance-feature-grid">
             <a class="dance-feature" href="#studio">
                 <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M11 18V6h10v12M14 10h4M8 18h16v7H8zM5 28v-7h3m19 7v-7h-3M12 25v3m8-3v3"/></svg>
-                <strong>Reservasi Studio</strong>
+                <strong>Studio Booking</strong>
             </a>
             <a class="dance-feature" href="#availability">
                 <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11"/><path d="M16 8v8l5 3"/></svg>
-                <strong>Jadwal Studio</strong>
+                <strong>Studio Schedule</strong>
             </a>
             <a class="dance-feature" href="#class">
                 <svg viewBox="0 0 32 32" aria-hidden="true"><path d="m7 17 1-9 9-1M8 8l16 16m-9 1 9-1 1-9M5 10l6-6m10 24 7-7"/></svg>
-                <strong>Kelas Dance</strong>
+                <strong>Dance Classes</strong>
             </a>
             <a class="dance-feature" href="{{ auth()->check() && auth()->user()->can('access-admin') ? route('admin.memberships.index') : route('memberships.index') }}">
                 <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="12" r="7"/><path d="m11 18-1 10 6-3 6 3-1-10m-5-10 1.2 2.4 2.6.4-1.9 1.8.5 2.6-2.4-1.3-2.4 1.3.5-2.6-1.9-1.8 2.6-.4Z"/></svg>
@@ -169,27 +172,29 @@
 
     <section id="studio" class="section">
         <h2 class="section-title">Our <span class="gold">Studio</span></h2>
-        <p class="sub">Ruang latihan yang nyaman, terang, dan siap dipakai untuk kelas maupun reservasi pribadi.</p>
+        <p class="sub">Comfortable, bright studios ready for classes and private practice.</p>
         <div class="studio-grid">
             @forelse ($studios as $studio)
                 <div class="content-card">
                     <div>
                         <h3>{{ $studio->name }}</h3>
                         @if ($studio->description)
-                            <p>{{ $studio->description }}</p>
+                            <p>{{ __($studio->description) }}</p>
                         @endif
                     </div>
                     <div class="shot studio-photo {{ $loop->even ? 'alt' : '' }}">
                         @if ($studio->image)
-                            <img src="{{ asset('storage/'.$studio->image) }}" alt="Foto {{ $studio->name }}" loading="lazy">
+                            <img src="{{ asset('storage/'.$studio->image) }}" alt="Photo of {{ $studio->name }}" loading="lazy">
+                        @else
+                            <span class="studio-image-unavailable">Gambar tidak tersedia</span>
                         @endif
                     </div>
                 </div>
             @empty
-                <p class="studio-empty">Belum ada studio yang tersedia.</p>
+                <p class="studio-empty">No studios are currently available.</p>
             @endforelse
         </div>
-        <button type="button" class="studio-see-more" disabled>See More</button>
+        <a class="studio-see-more" href="{{ route('user.studios.index') }}">See More</a>
     </section>
 
     </div>
@@ -216,7 +221,7 @@
         <dialog id="availability-dialog" class="availability-dialog" aria-labelledby="availability-dialog-title">
             <form method="dialog"><button class="availability-see-all" autofocus>Close ×</button></form>
             <h2 id="availability-dialog-title">Studio Availability Today</h2>
-            <p>Contoh jadwal tersedia. Ketersediaan belum terhubung ke jadwal database.</p>
+            <p>Sample available slots. Live studio availability is not connected yet.</p>
             <div class="availability-slots" id="availability-all-slots"></div>
         </dialog>
         <script>
@@ -232,7 +237,7 @@
         <div class="premium">
             <div class="eyebrow">Premium</div>
             <h2 class="section-title" style="margin-top:0">Move Without <span class="gold">Limits</span></h2>
-            <p class="sub" style="margin-bottom:18px">Reservasi studio, kelas, dan membership dalam satu alur yang simpel.</p>
+            <p class="sub" style="margin-bottom:18px">Studio bookings, dance classes, and memberships in one simple experience.</p>
             <div class="hero-actions" style="justify-content:center">
                 <a class="btn btn-fill" href="#studio">Book Studio</a>
                 <a class="btn" href="#class">Explore Classes</a>
@@ -243,12 +248,12 @@
     <section id="class" class="section dance-classes">
         <h2 class="section-title"><span class="gold">Dance</span> Class</h2>
         <p class="sub">Discover premium dance classes designed to improve your skills, rhythm, and stage presence.</p>
-        <div class="dance-class-track" tabindex="0" role="region" aria-label="Pilihan dance class, geser untuk melihat kelas lainnya">
+        <div class="dance-class-track" tabindex="0" role="region" aria-label="Dance classes: scroll to explore more classes">
             @foreach ([
-                ['name' => 'HipHop Beginner', 'coach' => 'Alex', 'price' => '$15', 'position' => '20% center', 'description' => 'Pelajari dasar hiphop, groove, dan koordinasi gerak untuk pemula.'],
-                ['name' => 'Heels Class', 'coach' => 'Sarah', 'price' => '$30', 'position' => '45% center', 'description' => 'Latih keseimbangan, postur, dan kepercayaan diri melalui koreografi heels.'],
-                ['name' => 'Afro Fusion', 'coach' => 'Zed', 'price' => '$20', 'position' => '70% center', 'description' => 'Eksplorasi ritme dan gerakan energik dalam koreografi Afro Fusion.'],
-                ['name' => 'Contemporary', 'coach' => 'Elena', 'price' => '$35', 'position' => '95% center', 'description' => 'Kembangkan ekspresi, fleksibilitas, dan aliran gerak contemporary.'],
+                ['name' => 'HipHop Beginner', 'coach' => 'Alex', 'price' => '$15', 'position' => '20% center', 'description' => 'Learn hip-hop basics, groove, and movement coordination for beginners.'],
+                ['name' => 'Heels Class', 'coach' => 'Sarah', 'price' => '$30', 'position' => '45% center', 'description' => 'Build balance, posture, and confidence through heels choreography.'],
+                ['name' => 'Afro Fusion', 'coach' => 'Zed', 'price' => '$20', 'position' => '70% center', 'description' => 'Explore rhythm and energetic movement through Afro Fusion choreography.'],
+                ['name' => 'Contemporary', 'coach' => 'Elena', 'price' => '$35', 'position' => '95% center', 'description' => 'Develop expression, flexibility, and fluid movement through contemporary dance.'],
             ] as $danceClass)
                 <article class="dance-class-card">
                     <div class="dance-class-photo" style="--photo-position:{{ $danceClass['position'] }}">
@@ -290,19 +295,19 @@
 
     <section id="about" class="section">
         <h2 class="section-title">About <span class="gold">Coach</span></h2>
-        <p class="sub">Potret singkat pengajar dan suasana kelas.</p>
+        <p class="sub">Meet our coach and discover the spirit of our classes.</p>
         <div class="content-card">
             <div class="shot"></div>
             <div>
                 <h3>Ricardo</h3>
-                <p>Coach dance dengan fokus pada ritme, teknik, dan pengajaran yang ringan dipahami. Cocok untuk pemula hingga level lanjut.</p>
+                <p>A dance coach focused on rhythm, technique, and approachable instruction for beginners and experienced dancers alike.</p>
             </div>
         </div>
     </section>
 
     <section class="section testimonials" aria-labelledby="testimonial-title">
         <h2 id="testimonial-title" class="section-title">Client Testimonial</h2>
-        <p class="sub">Voice of our distinguished performers · Contoh testimonial</p>
+        <p class="sub">Voice of our distinguished performers · Sample testimonials</p>
         <div class="testimonial-grid">
             @foreach ([
                 'The most exclusive dance environment I’ve ever experienced. Every detail is perfect.',
@@ -333,15 +338,15 @@
         <div class="qna-list">
             <details class="qna-item">
                 <summary>How do I book a private studio?</summary>
-                <p>Pilih studio dan jadwal yang tersedia, lalu masuk ke akun untuk melanjutkan reservasi. Ikuti petunjuk pemesanan dan pembayaran yang ditampilkan.</p>
+                <p>Choose a studio and an available time slot, then log in to continue your reservation. Follow the booking and payment instructions provided.</p>
             </details>
             <details class="qna-item">
                 <summary>What are the membership perks?</summary>
-                <p>Manfaat membership mengikuti paket yang dipilih. Buka halaman Membership untuk melihat pilihan paket, harga, dan manfaatnya sebelum mendaftar.</p>
+                <p>Membership benefits depend on your selected plan. Visit the Membership page to review plans, prices, and benefits before applying.</p>
             </details>
             <details class="qna-item">
                 <summary>What amenities are provided in the studios?</summary>
-                <p>Fasilitas dan kapasitas dapat berbeda di setiap studio. Periksa deskripsi studio atau hubungi pengelola untuk memastikan fasilitas yang kamu perlukan tersedia.</p>
+                <p>Amenities and capacity vary by studio. Check the studio description or contact our team to confirm that the facilities you need are available.</p>
             </details>
         </div>
     </section>

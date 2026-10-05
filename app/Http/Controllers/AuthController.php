@@ -27,7 +27,7 @@ class AuthController extends Controller
         }
 
         return back()
-            ->withErrors(['email' => 'Email atau password salah, atau akun tidak aktif.'])
+            ->withErrors(['email' => 'The email or password is incorrect, or your account is inactive.'])
             ->onlyInput('email');
     }
 

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <link rel="icon" type="image/png" href="{{ asset('images/logoorange.png') }}">
@@ -120,14 +120,14 @@
                         <label for="password">Password</label>
                         <div class="password-wrap">
                             <input id="password" type="password" name="password" placeholder="********" autocomplete="new-password" required>
-                            <button class="password-toggle" type="button" data-target="password" aria-label="Tampilkan password" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 12s3.5-5.5 9.5-5.5 9.5 5.5 9.5 5.5-3.5 5.5-9.5 5.5S2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></svg></button>
+                            <button class="password-toggle" type="button" data-target="password" aria-label="Show password" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 12s3.5-5.5 9.5-5.5 9.5 5.5 9.5 5.5-3.5 5.5-9.5 5.5S2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></svg></button>
                         </div>
                     </div>
                     <div>
                         <label for="password_confirmation">Confirm Password <span class="hint">Repeat again</span></label>
                         <div class="password-wrap">
                             <input id="password_confirmation" type="password" name="password_confirmation" placeholder="********" autocomplete="new-password" required>
-                            <button class="password-toggle" type="button" data-target="password_confirmation" aria-label="Tampilkan konfirmasi password" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 12s3.5-5.5 9.5-5.5 9.5 5.5 9.5 5.5-3.5 5.5-9.5 5.5S2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></svg></button>
+                            <button class="password-toggle" type="button" data-target="password_confirmation" aria-label="Show password confirmation" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 12s3.5-5.5 9.5-5.5 9.5 5.5 9.5 5.5-3.5 5.5-9.5 5.5S2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></svg></button>
                         </div>
                     </div>
                     <div>
@@ -148,7 +148,7 @@
                     </div>
                     <div class="terms">
                         <input id="terms" type="checkbox" name="terms" value="1" required>
-                        <label for="terms">Agreeing to all the <a href="#">rules</a> in Orange Academy</label>
+                        <label for="terms">I agree to all the <a href="#">rules</a> of Orange Dance Academy</label>
                     </div>
                     <button class="submit" type="submit">Create an Account</button>
                 </form>
@@ -163,7 +163,7 @@
                 const show = input.type === 'password';
                 input.type = show ? 'text' : 'password';
                 button.setAttribute('aria-pressed', String(show));
-                button.setAttribute('aria-label', show ? 'Sembunyikan password' : 'Tampilkan password');
+                button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
             });
         });
     </script>

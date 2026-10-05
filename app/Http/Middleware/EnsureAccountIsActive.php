@@ -16,7 +16,7 @@ class EnsureAccountIsActive
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
-            return to_route('login')->withErrors(['email' => 'Akun Anda tidak aktif. Hubungi admin.']);
+            return to_route('login')->withErrors(['email' => 'Your account is inactive. Please contact our team.']);
         }
 
         return $next($request);

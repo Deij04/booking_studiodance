@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <link rel="icon" type="image/png" href="{{ asset('images/logoorange.png') }}">
@@ -21,6 +21,7 @@
         .nav-links{display:flex;gap:26px;align-items:center;font-size:13px;text-transform:uppercase}
         .nav-links a,.nav-links button{transition:color .2s,background-color .2s,border-color .2s,box-shadow .2s}
         .nav-links>a:not(.btn){position:relative;padding:10px 0}
+        .nav-links>a[aria-current]{font-weight:800}
         .nav-links>a:not(.btn)::after{content:"";position:absolute;left:0;right:0;bottom:3px;height:2px;background:var(--gold);transform:scaleX(0);transition:transform .2s}
         .nav-links>a:not(.btn):hover,.nav-links>a:not(.btn):focus-visible{color:var(--gold)}
         .nav-links>a:not(.btn):hover::after,.nav-links>a:not(.btn):focus-visible::after{transform:scaleX(1)}

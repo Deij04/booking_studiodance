@@ -23,7 +23,7 @@ class MembershipApplicationTest extends TestCase
         $customer = User::factory()->create();
         $other = User::factory()->create();
         $plan = MembershipPlan::factory()->create(['status' => 'active', 'duration_days' => 30, 'price' => 150000]);
-        $this->actingAs($customer)->get(route('memberships.index'))->assertOk()->assertSee('Ajukan Membership');
+        $this->actingAs($customer)->get(route('memberships.index'))->assertOk()->assertSee('Apply for Membership');
         $data = ['membership_plan_id' => $plan->id, 'start_date' => today()->toDateString(), 'user_id' => $other->id, 'price' => 1, 'payment_status' => 'paid', 'status' => 'active'];
         $this->post(route('memberships.store'), $data)->assertSessionHasNoErrors()->assertRedirect(route('memberships.index'));
         $member = Membership::firstOrFail();
@@ -40,7 +40,7 @@ class MembershipApplicationTest extends TestCase
         $this->assertSame('active', $member->fresh()->status);
         $this->assertSame('paid', $member->fresh()->payment_status);
         $this->patch(route('admin.memberships.decide', $member), ['decision' => 'reject'])->assertSessionHasErrors('status');
-        $this->actingAs($customer)->get(route('memberships.index'))->assertOk()->assertSee('Aktif')->assertSee('Lunas');
+        $this->actingAs($customer)->get(route('memberships.index'))->assertOk()->assertSee('Active')->assertSee('Paid');
     }
 
     public function test_rejection_preserves_payment_and_customer_history_is_private(): void
@@ -52,7 +52,7 @@ class MembershipApplicationTest extends TestCase
         $this->assertSame('cancelled', $member->fresh()->status);
         $this->assertSame('paid', $member->fresh()->payment_status);
         $this->actingAs($member->user)->get(route('memberships.index'))->assertOk()
-            ->assertSee('Ditolak / Dibatalkan')
+            ->assertSee('Rejected / Cancelled')
             ->assertViewHas('memberships', fn ($memberships) => $memberships->count() === 1 && $memberships->first()->id === $member->id);
         $this->patch(route('admin.memberships.decide', $other), ['decision' => 'approve', 'payment_confirmed' => 1])->assertForbidden();
     }

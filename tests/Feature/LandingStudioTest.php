@@ -34,12 +34,12 @@ class LandingStudioTest extends TestCase
 
         $studio->update(['status' => 'inactive']);
         $this->get(route('landing'))->assertOk()
-            ->assertSee('Belum ada studio yang tersedia.')->assertDontSee('Ruang Aurora Baru');
+            ->assertSee('No studios are currently available.')->assertDontSee('Ruang Aurora Baru');
     }
 
     public function test_landing_handles_an_empty_studio_database(): void
     {
         $this->withoutVite();
-        $this->get(route('landing'))->assertOk()->assertSee('Belum ada studio yang tersedia.');
+        $this->get(route('landing'))->assertOk()->assertSee('No studios are currently available.');
     }
 }
