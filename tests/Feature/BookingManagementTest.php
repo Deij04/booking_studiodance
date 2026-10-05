@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\BookingActivity;
 use App\Models\ClassSchedule;
 use App\Models\Reservation;
 use App\Models\Studio;
@@ -32,6 +33,51 @@ class BookingManagementTest extends TestCase
         ];
     }
 
+    public function test_rejection_requires_reason_and_records_it_without_overwriting_notes(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+        $booking = Reservation::factory()->create(['notes' => 'Catatan pelanggan']);
+        foreach ([null, '   ', str_repeat('x', 1001)] as $reason) {
+            $this->patch(route('admin.bookings.decide', $booking), ['decision' => 'reject', 'rejection_reason' => $reason])->assertSessionHasErrors('rejection_reason');
+        }
+        $this->put(route('admin.bookings.update', $booking), ['status' => 'cancelled', 'payment_status' => 'unpaid'])->assertSessionHasErrors('rejection_reason');
+        $this->assertSame('pending', $booking->fresh()->status);
+        $this->assertDatabaseCount('booking_activities', 0);
+        $this->patch(route('admin.bookings.decide', $booking), ['decision' => 'reject', 'rejection_reason' => ' Studio perlu perbaikan '])->assertSessionHasNoErrors();
+        $this->assertSame('Studio perlu perbaikan', $booking->fresh()->rejection_reason);
+        $this->assertSame('Catatan pelanggan', $booking->fresh()->notes);
+        $this->assertSame('Studio perlu perbaikan', BookingActivity::sole()->changes['rejection_reason']['after']);
+        $this->get(route('admin.bookings.edit', $booking))->assertOk()->assertSee('Studio perlu perbaikan');
+        $this->put(route('admin.bookings.update', $booking), ['status' => 'cancelled', 'payment_status' => 'unpaid', 'rejection_reason' => 'Ubah alasan'])->assertSessionHasNoErrors();
+        $this->assertSame('Studio perlu perbaikan', $booking->fresh()->rejection_reason);
+    }
+
+    public function test_activity_tracks_actor_and_changes_and_is_visible_only_to_super_admin(): void
+    {
+        $actor = User::factory()->admin()->create(['name' => 'Petugas Konfirmasi']);
+        $booking = Reservation::factory()->create(['notes' => 'Catatan awal']);
+        $this->actingAs($actor);
+        $this->patch(route('admin.bookings.decide', $booking), ['decision' => 'accept', 'actor_id' => 999])->assertSessionHasNoErrors();
+        $activity = BookingActivity::sole();
+        $this->assertSame($actor->id, $activity->actor_id);
+        $this->assertSame('accepted', $activity->action);
+        $this->assertSame(['before' => 'pending', 'after' => 'confirmed'], $activity->changes['status']);
+        $this->put(route('admin.bookings.update', $booking), ['status' => 'confirmed', 'payment_status' => 'paid', 'notes' => 'Sudah diperiksa'])->assertSessionHasNoErrors();
+        $update = BookingActivity::latest('id')->first();
+        $this->assertSame(['before' => 'Catatan awal', 'after' => 'Sudah diperiksa'], $update->changes['notes']);
+        $this->assertSame(['before' => 'unpaid', 'after' => 'paid'], $update->changes['payment_status']);
+        $this->patch(route('admin.bookings.decide', $booking), ['decision' => 'reject', 'rejection_reason' => 'Jadwal tidak tersedia'])->assertSessionHasErrors('decision');
+        $this->assertDatabaseCount('booking_activities', 2);
+        $this->get(route('admin.bookings.edit', $booking))->assertOk()->assertViewHas('activities', null)
+            ->assertDontSee('Riwayat Aktivitas Booking')->assertDontSee('Catatan awal');
+        $this->actingAs(User::factory()->superAdmin()->create());
+        $this->get(route('admin.bookings.edit', $booking))->assertOk()->assertSee('Riwayat Aktivitas Booking')
+            ->assertSee('Petugas Konfirmasi')->assertSee('Catatan awal')->assertSee('Sudah diperiksa');
+        $actor->delete();
+        $this->assertNull($activity->fresh()->actor_id);
+        $this->assertSame('Petugas Konfirmasi', $activity->fresh()->actor_name);
+    }
+
     public function test_payment_proof_can_be_created_viewed_and_replaced_privately(): void
     {
         Storage::fake('local');
@@ -41,17 +87,24 @@ class BookingManagementTest extends TestCase
         $this->post(route('admin.bookings.store'), $data + ['payment_proof' => $proof()])->assertSessionHasNoErrors();
         $booking = Reservation::where('user_id', $data['user_id'])->sole();
         $oldPath = $booking->payment_proof;
+        $createdActivity = BookingActivity::where('reservation_id', $booking->id)->sole();
+        $this->assertSame('created', $createdActivity->action);
+        $this->assertSame('Bukti baru diunggah', $createdActivity->changes['payment_proof']['after']);
         Storage::disk('local')->assertExists($oldPath);
         $this->assertSame('unpaid', $booking->payment_status);
         $this->get(route('admin.bookings.payment-proof', $booking))->assertOk();
-        $this->get(route('admin.bookings.edit', $booking))->assertOk()->assertSee('Lihat bukti transfer tersimpan');
+        $this->get(route('admin.bookings.edit', $booking))->assertOk()
+            ->assertSee(route('admin.bookings.payment-proof', $booking))
+            ->assertSee('Lihat bukti transfer tersimpan');
         $this->put(route('admin.bookings.update', $booking), ['status' => 'confirmed', 'payment_status' => 'unpaid'])->assertSessionHasNoErrors();
         $this->assertSame($oldPath, $booking->fresh()->payment_proof);
         $this->put(route('admin.bookings.update', $booking), ['status' => 'confirmed', 'payment_status' => 'unpaid', 'payment_proof' => $proof()])->assertSessionHasNoErrors();
         Storage::disk('local')->assertMissing($oldPath);
+        $this->assertSame('Bukti baru diunggah', BookingActivity::latest('id')->first()->changes['payment_proof']['after']);
         Storage::disk('local')->assertExists($booking->fresh()->payment_proof);
         $this->actingAs(User::factory()->superAdmin()->create());
         $this->get(route('admin.bookings.payment-proof', $booking))->assertOk();
+        $this->get(route('admin.bookings.edit', $booking))->assertOk()->assertSee('Lihat bukti transfer tersimpan');
         $this->actingAs(User::find($data['user_id']));
         $this->get(route('admin.bookings.payment-proof', $booking))->assertForbidden();
     }
@@ -67,6 +120,7 @@ class BookingManagementTest extends TestCase
         $this->put(route('admin.bookings.update', $booking), ['status' => 'completed', 'payment_status' => 'unpaid', 'payment_proof' => UploadedFile::fake()->create('proof.pdf', 20, 'application/pdf')])->assertSessionHasErrors('payment_status');
         $this->assertSame([], Storage::disk('local')->allFiles('payment-proofs'));
         $this->assertNull($booking->fresh()->payment_proof);
+        $this->actingAs(User::factory()->superAdmin()->create());
         $this->get(route('admin.bookings.payment-proof', $booking))->assertNotFound();
     }
 
@@ -190,13 +244,13 @@ class BookingManagementTest extends TestCase
             $this->actingAs(User::factory()->create(['role' => $role]));
             foreach (['accept' => 'confirmed', 'reject' => 'cancelled'] as $decision => $status) {
                 $booking = Reservation::factory()->create(['payment_status' => 'paid', 'notes' => 'Catatan awal']);
-                $this->patch(route('admin.bookings.decide', $booking), ['decision' => $decision, 'payment_status' => 'unpaid'])
+                $this->patch(route('admin.bookings.decide', $booking), ['decision' => $decision, 'payment_status' => 'unpaid', 'rejection_reason' => 'Jadwal tidak tersedia'])
                     ->assertRedirect(route('admin.bookings.index'))->assertSessionHasNoErrors();
                 $this->assertSame($status, $booking->fresh()->status);
                 $this->assertSame('paid', $booking->fresh()->payment_status);
                 $this->assertSame('Catatan awal', $booking->fresh()->notes);
                 $this->assertSame($decision === 'accept' ? 'booked' : 'available', $booking->studioSchedule->fresh()->status);
-                $this->patch(route('admin.bookings.decide', $booking), ['decision' => 'reject'])->assertSessionHasErrors('decision');
+                $this->patch(route('admin.bookings.decide', $booking), ['decision' => 'reject', 'rejection_reason' => 'Jadwal tidak tersedia'])->assertSessionHasErrors('decision');
                 $this->assertSame($status, $booking->fresh()->status);
             }
         }
@@ -210,7 +264,7 @@ class BookingManagementTest extends TestCase
         $booking->studioSchedule->update(['status' => 'blocked']);
         $this->patch(route('admin.bookings.decide', $booking), ['decision' => 'accept'])->assertSessionHasErrors('decision');
         $this->assertSame('pending', $booking->fresh()->status);
-        $this->patch(route('admin.bookings.decide', $booking), ['decision' => 'reject'])->assertSessionHasNoErrors();
+        $this->patch(route('admin.bookings.decide', $booking), ['decision' => 'reject', 'rejection_reason' => 'Jadwal tidak tersedia'])->assertSessionHasNoErrors();
         $this->assertSame('blocked', $booking->studioSchedule->fresh()->status);
     }
 
@@ -232,7 +286,7 @@ class BookingManagementTest extends TestCase
         $booking = Reservation::factory()->create();
         $booking->studioSchedule->update(['status' => 'booked']);
         $this->actingAs(User::factory()->superAdmin()->create());
-        $this->put(route('admin.bookings.update', $booking), ['status' => 'cancelled', 'payment_status' => 'unpaid'])
+        $this->put(route('admin.bookings.update', $booking), ['status' => 'cancelled', 'payment_status' => 'unpaid', 'rejection_reason' => 'Pelanggan membatalkan'])
             ->assertSessionHasNoErrors();
         $this->assertModelExists($booking);
         $this->assertSame('cancelled', $booking->fresh()->status);

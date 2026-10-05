@@ -1,0 +1,14 @@
+input[type="date"],
+input[type="time"] {
+    color-scheme: dark;
+    cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+    opacity: 1;
+    cursor: pointer;
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0.25rem;
+}

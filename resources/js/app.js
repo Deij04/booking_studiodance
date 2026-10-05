@@ -1,5 +1,7 @@
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
+import './booking-calendar';
+import './date-inputs';
 
 const bookingAlert = Swal.mixin({
     background: '#171717',
@@ -25,8 +27,27 @@ document.querySelectorAll('[data-booking-confirm]').forEach((form) => {
             cancelButtonText: 'Batal',
             confirmButtonColor: accepting ? '#15803d' : '#dc2626',
             focusCancel: true,
+            ...(accepting ? {} : {
+                input: 'textarea',
+                inputLabel: 'Alasan penolakan',
+                inputPlaceholder: 'Tuliskan alasan pengajuan ditolak...',
+                inputAttributes: { maxlength: '1000', 'aria-label': 'Alasan penolakan' },
+                inputValidator: (value) => !value.trim()
+                    ? 'Alasan penolakan wajib diisi.'
+                    : value.length > 1000 ? 'Alasan maksimal 1000 karakter.' : undefined,
+            }),
         });
         if (result.isConfirmed) {
+            if (!accepting) {
+                let reason = form.querySelector('[name="rejection_reason"]');
+                if (!reason) {
+                    reason = document.createElement('input');
+                    reason.type = 'hidden';
+                    reason.name = 'rejection_reason';
+                    form.appendChild(reason);
+                }
+                reason.value = result.value.trim();
+            }
             form.querySelectorAll('button').forEach((button) => { button.disabled = true; });
             HTMLFormElement.prototype.submit.call(form);
         } else {

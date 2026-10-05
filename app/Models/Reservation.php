@@ -23,6 +23,7 @@ class Reservation extends Model
         'payment_proof',
         'status',
         'notes',
+        'rejection_reason',
     ];
 
     protected function casts(): array

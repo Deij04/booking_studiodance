@@ -15,13 +15,22 @@ class StudioController extends Controller
 {
     public function index(Request $request): View
     {
+        if ($request->query('tab') === 'operations') {
+            return view('admin.studios.index', [
+                'tab' => 'operations',
+                'hours' => app(\App\Services\BookingHours::class)->current(),
+                'studios' => Studio::where('status', 'active')->orderBy('name')->get(),
+                'blocks' => \App\Models\StudioSchedule::with('studio')->where('status', 'blocked')
+                    ->orderByDesc('date')->orderBy('start_time')->paginate(10)->withQueryString(),
+            ]);
+        }
         $filters = $request->validate(['search' => ['nullable', 'string', 'max:100']]);
         $search = trim($filters['search'] ?? '');
         $studios = Studio::query()
             ->when($search !== '', fn ($query) => $query->where('name', 'like', '%'.$search.'%'))
             ->latest('id')->paginate(10)->withQueryString();
 
-        return view('admin.studios.index', compact('studios', 'search'));
+        return view('admin.studios.index', ['tab' => 'studios', 'studios' => $studios, 'search' => $search]);
     }
 
     public function create(): View

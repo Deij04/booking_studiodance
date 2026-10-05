@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\BookingActivity;
 use App\Models\Reservation;
 use App\Models\Studio;
 use App\Models\StudioSchedule;
 use App\Models\User;
+use App\Services\BookingAvailability;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -63,9 +65,19 @@ class BookingController extends Controller
     public function create(): View
     {
         return view('admin.bookings.create', [
+            'hours' => app(\App\Services\BookingHours::class)->current(),
             'customers' => User::where('role', 'customer')->where('status', 'active')->orderBy('name')->get(),
             'studios' => Studio::where('status', 'active')->orderBy('name')->get(),
         ]);
+    }
+
+    public function availability(Request $request, Studio $studio)
+    {
+        abort_unless($studio->status === 'active', 404);
+        $data = $request->validate(['month' => ['required', 'date_format:Y-m']]);
+
+        return response()->json(['days' => app(BookingAvailability::class)->month($studio, $data['month'])])
+            ->header('Cache-Control', 'private, no-store');
     }
 
     public function store(Request $request): RedirectResponse
@@ -74,8 +86,8 @@ class BookingController extends Controller
             'user_id' => ['required', 'integer', Rule::exists('users', 'id')->where('role', 'customer')->where('status', 'active')],
             'studio_id' => ['required', 'integer', Rule::exists('studios', 'id')->where('status', 'active')],
             'date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
-            'start_time' => ['required', 'date_format:H:i'],
-            'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
+            'start_time' => ['required', 'date_format:H:i', new \App\Rules\HalfHour],
+            'end_time' => ['required', 'date_format:H:i', new \App\Rules\HalfHour, 'after:start_time'],
             'purpose' => ['nullable', 'string', 'max:255'],
             'payment_proof' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
             'payment_status' => ['required', Rule::in(array_keys(Reservation::PAYMENT_STATUSES))],
@@ -90,6 +102,10 @@ class BookingController extends Controller
             $studio = Studio::whereKey($data['studio_id'])->where('status', 'active')->lockForUpdate()->first();
             if (! $studio) {
                 throw ValidationException::withMessages(['studio_id' => 'Studio sudah tidak tersedia.']);
+            }
+            $available = app(BookingAvailability::class)->month($studio, substr($data['date'], 0, 7));
+            if (! in_array($data['end_time'], $available[$data['date']][$data['start_time']] ?? [], true)) {
+                throw ValidationException::withMessages(['start_time' => 'Jam yang dipilih sudah terisi atau di luar jam operasional. Pilih ulang tanggal dan jam.']);
             }
             $overlap = fn ($query) => $query->whereDate('date', $data['date'])
                 ->whereTime('start_time', '<', $data['end_time'].':00')->whereTime('end_time', '>', $data['start_time'].':00');
@@ -106,13 +122,14 @@ class BookingController extends Controller
             $schedule = $studio->studioSchedules()->create([
                 'date' => $data['date'], 'start_time' => $data['start_time'], 'end_time' => $data['end_time'], 'status' => 'booked',
             ]);
-            Reservation::create([
+            $booking = Reservation::create([
                 'booking_code' => 'RES-'.now()->format('Ymd').'-'.Str::upper((string) Str::ulid()),
                 'user_id' => $data['user_id'], 'studio_schedule_id' => $schedule->id,
                 'purpose' => $data['purpose'] ?? null, 'notes' => $data['notes'] ?? null,
                 'total_price' => $price, 'payment_status' => $data['payment_status'], 'status' => 'confirmed',
                 'payment_proof' => $proof,
             ]);
+            $this->recordActivity($booking, 'created', []);
         });
 
         return to_route('admin.bookings.index', ['tab' => 'active'])->with('success', 'Booking berhasil dibuat dan langsung dikonfirmasi.');
@@ -120,7 +137,10 @@ class BookingController extends Controller
 
     public function decide(Request $request, Reservation $booking): RedirectResponse
     {
-        $data = $request->validate(['decision' => ['required', Rule::in(['accept', 'reject'])]]);
+        $data = $request->validate([
+            'decision' => ['required', Rule::in(['accept', 'reject'])],
+            'rejection_reason' => ['required_if:decision,reject', 'nullable', 'string', 'max:1000', 'regex:/\S/u'],
+        ]);
         DB::transaction(function () use ($booking, $data) {
             $booking = Reservation::whereKey($booking->id)->lockForUpdate()->firstOrFail();
             if ($booking->status !== 'pending') {
@@ -131,7 +151,12 @@ class BookingController extends Controller
             if ($accept && $schedule->status === 'blocked') {
                 throw ValidationException::withMessages(['decision' => 'Jadwal studio sedang diblokir.']);
             }
-            $booking->update(['status' => $accept ? 'confirmed' : 'cancelled']);
+            $before = $booking->getAttributes();
+            $booking->update([
+                'status' => $accept ? 'confirmed' : 'cancelled',
+                'rejection_reason' => $accept ? null : trim($data['rejection_reason']),
+            ]);
+            $this->recordActivity($booking, $accept ? 'accepted' : 'rejected', $before);
             if ($schedule->status !== 'blocked') {
                 $schedule->update(['status' => $accept ? 'booked' : 'available']);
             }
@@ -146,12 +171,17 @@ class BookingController extends Controller
     {
         $booking->load(['user', 'studioSchedule.studio']);
 
-        return view('admin.bookings.edit', compact('booking'));
+        $activities = auth()->user()->role === 'super_admin'
+            ? BookingActivity::where('reservation_id', $booking->id)->latest('id')->paginate(10)
+            : null;
+
+        return view('admin.bookings.edit', compact('booking', 'activities'));
     }
 
     public function update(Request $request, Reservation $booking): RedirectResponse
     {
         $data = $request->validate([
+            'rejection_reason' => ['nullable', 'string', 'max:1000'],
             'payment_proof' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
             'status' => ['required', Rule::in(array_keys(Reservation::STATUSES))],
             'payment_status' => ['required', Rule::in(array_keys(Reservation::PAYMENT_STATUSES))],
@@ -162,6 +192,14 @@ class BookingController extends Controller
         $this->saveWithProof($request, function ($proof) use ($booking, $data) {
             $booking = Reservation::whereKey($booking->id)->lockForUpdate()->firstOrFail();
             $schedule = StudioSchedule::whereKey($booking->studio_schedule_id)->lockForUpdate()->firstOrFail();
+            if ($booking->status === 'pending' && $data['status'] === 'cancelled') {
+                if (! preg_match('/\S/u', $data['rejection_reason'] ?? '')) {
+                    throw ValidationException::withMessages(['rejection_reason' => 'Alasan penolakan wajib diisi.']);
+                }
+                $data['rejection_reason'] = trim($data['rejection_reason']);
+            } else {
+                unset($data['rejection_reason']);
+            }
             if ($booking->status === 'confirmed' && $data['status'] === 'pending') {
                 throw ValidationException::withMessages(['status' => 'Booking yang sudah diterima tidak dapat dikembalikan ke pengajuan.']);
             }
@@ -175,10 +213,12 @@ class BookingController extends Controller
                 throw ValidationException::withMessages(['status' => 'Jadwal studio sedang diblokir.']);
             }
             $oldProof = $booking->payment_proof;
+            $before = $booking->getAttributes();
             if ($proof) {
                 $data['payment_proof'] = $proof;
             }
             $booking->update($data);
+            $this->recordActivity($booking, 'updated', $before);
             if ($schedule->status !== 'blocked') {
                 $schedule->update(['status' => $data['status'] === 'cancelled' ? 'available' : 'booked']);
             }
@@ -215,5 +255,28 @@ class BookingController extends Controller
         if ($oldPath && str_starts_with($oldPath, 'payment-proofs/') && ! str_contains($oldPath, '..')) {
             Storage::disk('local')->delete($oldPath);
         }
+    }
+
+    private function recordActivity(Reservation $booking, string $action, array $before): void
+    {
+        $changes = [];
+        foreach (['user_id', 'studio_schedule_id', 'purpose', 'total_price', 'status', 'payment_status', 'notes', 'payment_proof', 'rejection_reason'] as $field) {
+            $old = $before[$field] ?? null;
+            $new = $booking->getAttributes()[$field] ?? null;
+            if ((string) $old !== (string) $new) {
+                $changes[$field] = $field === 'payment_proof'
+                    ? ['before' => $old ? 'Bukti sebelumnya' : null, 'after' => $new ? 'Bukti baru diunggah' : null]
+                    : ['before' => $old, 'after' => $new];
+            }
+        }
+        if ($changes === []) {
+            return;
+        }
+        $actor = auth()->user();
+        BookingActivity::create([
+            'reservation_id' => $booking->id, 'actor_id' => $actor->id,
+            'actor_name' => $actor->name, 'actor_email' => $actor->email, 'actor_role' => $actor->role,
+            'action' => $action, 'changes' => $changes,
+        ]);
     }
 }

@@ -7,9 +7,11 @@
         <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
                 <h2 class="text-2xl font-bold">Kelola Studio</h2>
-                <p class="mt-2 text-sm text-white/50">Kelola informasi, kapasitas, harga sewa, dan foto studio.</p>
+                <p class="mt-2 text-sm text-white/50">Kelola data studio, jam operasional, dan blokir jadwal.</p>
             </div>
-            <a href="{{ route('admin.studios.create') }}" class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black hover:bg-[#ffda58]">+ Tambah Studio</a>
+            @if($tab === 'studios')
+                <a href="{{ route('admin.studios.create') }}" class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black hover:bg-[#ffda58]">+ Tambah Studio</a>
+            @endif
         </div>
         @if(session('success'))
             <div role="status" class="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-300">{{ session('success') }}</div>
@@ -17,6 +19,14 @@
         @if(session('error'))
             <div role="alert" class="rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-300">{{ session('error') }}</div>
         @endif
+        <nav class="flex flex-wrap gap-2 border-b border-white/10 pb-3" aria-label="Pengelolaan studio">
+            @foreach(['studios' => 'Daftar Studio', 'operations' => 'Operasional Studio'] as $value => $label)
+                <a href="{{ route('admin.studios.index', ['tab' => $value]) }}" @if($tab === $value) aria-current="page" @endif class="rounded-xl px-4 py-3 text-sm font-semibold {{ $tab === $value ? 'bg-[#f2c83f] text-black' : 'text-white/60 hover:bg-white/5 hover:text-white' }}">{{ $label }}</a>
+            @endforeach
+        </nav>
+        @if($tab === 'operations')
+            @include('admin.studios.operations')
+        @else
         <section class="overflow-hidden rounded-2xl border border-white/10 bg-[#171717]">
             <form method="GET" action="{{ route('admin.studios.index') }}" class="flex flex-wrap items-end gap-3 border-b border-white/10 p-5">
                 <div class="min-w-0 flex-1">
@@ -67,5 +77,6 @@
             </div>
             <div class="border-t border-white/10 p-5">{{ $studios->links() }}</div>
         </section>
+        @endif
     </div>
 @endsection

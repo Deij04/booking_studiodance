@@ -9,18 +9,59 @@
             <div><dt class="text-xs text-white/45">Keperluan</dt><dd class="mt-2 break-words">{{ $booking->purpose ?: '-' }}</dd></div>
             <div><dt class="text-xs text-white/45">Total pembayaran</dt><dd class="mt-2 text-xl font-semibold text-[#f2c83f]">Rp {{ number_format($booking->total_price, 0, ',', '.') }}</dd></div>
         </dl>
+        @if($booking->rejection_reason)
+            <div class="rounded-xl border border-red-400/20 bg-red-400/10 p-4"><h3 class="text-sm font-semibold text-red-300">Alasan Penolakan</h3><p class="mt-2 whitespace-pre-wrap break-words text-sm text-white/70">{{ $booking->rejection_reason }}</p></div>
+        @endif
         <form method="POST" enctype="multipart/form-data" action="{{ route('admin.bookings.update', $booking) }}" class="rounded-2xl border border-white/10 bg-[#171717] p-6">
             @csrf
             @method('PUT')
             @if($errors->any())<div role="alert" class="mb-6 rounded-xl bg-red-400/10 p-4 text-sm text-red-300">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
-            @php($inputClass = 'mt-2 block w-full rounded-xl border border-white/15 bg-[#0d0d0d] px-4 py-3 text-sm outline-none focus:border-[#f2c83f]')
+            @php
+                $inputClass = 'mt-2 block w-full rounded-xl border border-white/15 bg-[#0d0d0d] px-4 py-3 text-sm outline-none focus:border-[#f2c83f]';
+            @endphp
             <div class="grid gap-5 sm:grid-cols-2">
                 <div><label for="status" class="text-sm text-white/70">Status booking</label><select id="status" name="status" required class="{{ $inputClass }}">@foreach(\App\Models\Reservation::STATUSES as $value => $label) @if((!in_array($booking->status, ['cancelled', 'completed']) || $value === $booking->status) && !($booking->status === 'confirmed' && $value === 'pending'))<option value="{{ $value }}" @selected(old('status', $booking->status) === $value)>{{ $label }}</option>@endif @endforeach</select><p class="mt-2 text-xs text-white/45">Booking yang dibatalkan atau selesai tidak dapat diaktifkan kembali.</p></div>
                 <div><label for="payment_status" class="text-sm text-white/70">Status pembayaran</label><select id="payment_status" name="payment_status" required class="{{ $inputClass }}">@foreach(\App\Models\Reservation::PAYMENT_STATUSES as $value => $label)<option value="{{ $value }}" @selected(old('payment_status', $booking->payment_status) === $value)>{{ $label }}</option>@endforeach</select><p class="mt-2 text-xs text-white/45">Pembayaran harus lunas untuk menyelesaikan booking.</p></div>
                 @include('admin.bookings.payment-proof')
+                @if($booking->status === 'pending')
+                    <div class="sm:col-span-2"><label for="rejection_reason" class="text-sm text-white/70">Alasan penolakan</label><textarea id="rejection_reason" name="rejection_reason" rows="3" maxlength="1000" class="{{ $inputClass }}">{{ old('rejection_reason') }}</textarea><p class="mt-2 text-xs text-white/45">Wajib diisi jika pengajuan diubah menjadi Dibatalkan.</p></div>
+                @endif
                 <div class="sm:col-span-2"><label for="notes" class="text-sm text-white/70">Catatan</label><textarea id="notes" name="notes" rows="4" maxlength="5000" class="{{ $inputClass }}">{{ old('notes', $booking->notes) }}</textarea></div>
             </div>
             <div class="mt-6 flex justify-end gap-4 border-t border-white/10 pt-6"><a href="{{ route('admin.bookings.index', ['tab' => match ($booking->status) { 'pending' => 'requests', 'confirmed' => 'active', default => 'history' }]) }}" class="px-3 py-3 text-sm text-white/60">Batal</a><button type="submit" class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black hover:bg-[#ffda58]">Simpan Perubahan</button></div>
         </form>
+        @if(auth()->user()->role === 'super_admin')
+            <section class="rounded-2xl border border-white/10 bg-[#171717] p-6">
+                <h3 class="text-lg font-semibold">Riwayat Aktivitas Booking</h3>
+                <p class="mt-2 text-xs text-white/45">Hanya terlihat oleh super admin. Aktivitas dicatat sejak fitur ini diaktifkan.</p>
+                @php
+                    $activityLabels = ['created' => 'Membuat booking (langsung dikonfirmasi)', 'accepted' => 'Menerima booking', 'rejected' => 'Menolak booking', 'updated' => 'Mengedit booking'];
+                    $fieldLabels = ['user_id' => 'ID pelanggan', 'studio_schedule_id' => 'ID jadwal', 'purpose' => 'Keperluan', 'total_price' => 'Total biaya', 'status' => 'Status booking', 'payment_status' => 'Pembayaran', 'notes' => 'Catatan', 'payment_proof' => 'Bukti transfer'];
+                    $formatValue = fn ($field, $value) => match ($field) {
+                        'status' => \App\Models\Reservation::STATUSES[$value] ?? '-',
+                        'payment_status' => \App\Models\Reservation::PAYMENT_STATUSES[$value] ?? '-',
+                        'total_price' => $value !== null ? 'Rp '.number_format((float) $value, 0, ',', '.') : '-',
+                        default => $value === null || $value === '' ? '-' : $value,
+                    };
+                @endphp
+                <div class="mt-5 space-y-4">
+                    @forelse($activities as $activity)
+                        <article class="rounded-xl border border-white/10 p-4">
+                            <p class="text-sm font-semibold text-[#f2c83f]">{{ $activityLabels[$activity->action] ?? $activity->action }}</p>
+                            <p class="mt-2 text-sm">{{ $activity->actor_name }} <span class="text-xs text-white/45">({{ str_replace('_', ' ', $activity->actor_role) }})</span></p>
+                            <p class="mt-1 text-xs text-white/45">{{ $activity->actor_email }} &middot; {{ $activity->created_at->format('d/m/Y H:i:s') }}</p>
+                            <dl class="mt-3 space-y-2 text-sm">
+                                @foreach($activity->changes as $field => $change)
+                                    <div class="break-words"><dt class="text-xs text-white/45">{{ $fieldLabels[$field] ?? $field }}</dt><dd class="mt-1 whitespace-pre-wrap">{{ $formatValue($field, $change['before']) }} &rarr; {{ $formatValue($field, $change['after']) }}</dd></div>
+                                @endforeach
+                            </dl>
+                        </article>
+                    @empty
+                        <p class="text-sm text-white/45">Belum ada aktivitas yang tercatat untuk booking ini.</p>
+                    @endforelse
+                </div>
+                <div class="mt-4">{{ $activities->links() }}</div>
+            </section>
+        @endif
     </div>
 @endsection

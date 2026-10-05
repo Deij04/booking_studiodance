@@ -9,6 +9,13 @@ class ClassRegistration extends Model
 {
     use HasFactory;
 
+    public const STATUSES = [
+        'pending' => 'Menunggu',
+        'confirmed' => 'Dikonfirmasi',
+        'cancelled' => 'Dibatalkan',
+        'completed' => 'Selesai',
+    ];
+
     protected $fillable = [
         'user_id',
         'class_schedule_id',
