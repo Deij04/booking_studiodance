@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\UsePublicEnglish;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,13 +14,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->web(append: [EnsureAccountIsActive::class]);
+        $middleware->web(append: [UsePublicEnglish::class, EnsureAccountIsActive::class]);
         $middleware->redirectUsersTo(fn (Request $request) => route(
             $request->user()->can('access-admin') ? 'admin.dashboard' : 'landing',
         ));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
+            fn (Request $request) => $request->expectsJson() || $request->is('api/*', 'admin/booking-availability/*'),
         );
     })->create();

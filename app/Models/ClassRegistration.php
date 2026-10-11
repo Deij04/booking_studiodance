@@ -9,6 +9,13 @@ class ClassRegistration extends Model
 {
     use HasFactory;
 
+    public const STATUSES = [
+        'pending' => 'Menunggu',
+        'confirmed' => 'Dikonfirmasi',
+        'cancelled' => 'Dibatalkan',
+        'completed' => 'Selesai',
+    ];
+
     protected $fillable = [
         'user_id',
         'class_schedule_id',
@@ -24,6 +31,26 @@ class ClassRegistration extends Model
             'registration_date' => 'date',
             'price' => 'decimal:2',
         ];
+    }
+
+    public function getPaymentAmountAttribute(): float
+    {
+        return round((float) $this->price * ($this->payment?->payment_type === 'dp' ? 0.5 : 1), 2);
+    }
+
+    public function getRemainingAmountAttribute(): float
+    {
+        return round((float) $this->price - $this->payment_amount, 2);
+    }
+
+    public function payment()
+    {
+        return $this->hasOne(ClassPayment::class);
+    }
+
+    public function settlement()
+    {
+        return $this->hasOne(ReservationSettlement::class, 'class_registration_id');
     }
 
     public function user()

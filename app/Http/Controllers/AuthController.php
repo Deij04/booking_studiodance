@@ -27,7 +27,7 @@ class AuthController extends Controller
         }
 
         return back()
-            ->withErrors(['email' => 'Email atau password salah, atau akun tidak aktif.'])
+            ->withErrors(['email' => 'The email or password is incorrect, or your account is inactive.'])
             ->onlyInput('email');
     }
 
@@ -70,6 +70,6 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('login');
+        return redirect()->route('landing');
     }
 }

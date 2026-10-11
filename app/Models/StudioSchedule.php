@@ -15,6 +15,7 @@ class StudioSchedule extends Model
         'start_time',
         'end_time',
         'status',
+        'block_reason',
     ];
 
     public function studio()

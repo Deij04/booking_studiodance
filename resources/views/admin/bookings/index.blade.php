@@ -13,31 +13,42 @@
                 </a>
             @endforeach
         </nav>
-        <p class="text-sm text-white/50">{{ ['requests' => 'Pengajuan baru yang belum diurus. Periksa detail, lalu terima atau tolak booking.', 'active' => 'Booking yang sudah diterima dan menunggu pelaksanaan atau penyelesaian.', 'history' => 'Booking yang sudah selesai, ditolak, atau dibatalkan.'][$tab] }}</p>
+        <p class="text-sm text-white/50">{{ ['requests' => 'Pengajuan baru yang belum diurus. Periksa detail, lalu terima atau tolak booking.', 'active' => 'Booking yang sudah dikonfirmasi dan menunggu pelaksanaan atau penyelesaian.', 'history' => 'Booking yang sudah selesai, ditolak, atau dibatalkan.'][$tab] }}</p>
         <section class="overflow-hidden rounded-2xl border border-white/10 bg-[#171717]">
             <form method="GET" action="{{ route('admin.bookings.index') }}" class="flex flex-wrap items-end gap-3 border-b border-white/10 p-5">
                 <input type="hidden" name="tab" value="{{ $tab }}">
                 <div class="min-w-48 flex-1"><label for="search" class="text-xs text-white/60">Kode, pelanggan, atau studio</label><input id="search" name="search" value="{{ $filters['search'] }}" maxlength="100" placeholder="Cari booking..." class="{{ $inputClass }}"></div>
                 @if($tab === 'history')
-                    <div><label for="status" class="text-xs text-white/60">Status booking</label><select id="status" name="status" class="{{ $inputClass }}"><option value="">Semua riwayat</option>@foreach($tabs[$tab]['statuses'] as $value)<option value="{{ $value }}" @selected(($filters['status'] ?? '') === $value)>{{ \App\Models\Reservation::STATUSES[$value] }}</option>@endforeach</select></div>
+                    <div><label for="status" class="text-xs text-white/60">Status booking</label><select id="status" name="status" class="{{ $inputClass }}"><option value="">Semua status</option>@foreach($tabs[$tab]['statuses'] as $value)<option value="{{ $value }}" @selected(($filters['status'] ?? '') === $value)>{{ \App\Models\Reservation::STATUSES[$value] }}</option>@endforeach</select></div>
                 @endif
-                <div><label for="payment_status" class="text-xs text-white/60">Pembayaran</label><select id="payment_status" name="payment_status" class="{{ $inputClass }}"><option value="">Semua pembayaran</option>@foreach(\App\Models\Reservation::PAYMENT_STATUSES as $value => $label)<option value="{{ $value }}" @selected(($filters['payment_status'] ?? '') === $value)>{{ $label }}</option>@endforeach</select></div>
+                @if($tab === 'requests')
+                    <div><label for="payment_type" class="text-xs text-white/60">Jenis pembayaran</label><select id="payment_type" name="payment_type" class="{{ $inputClass }}"><option value="">Semua pembayaran</option><option value="full" @selected(($filters['payment_type'] ?? '') === 'full')>Lunas</option><option value="dp" @selected(($filters['payment_type'] ?? '') === 'dp')>DP (belum lunas)</option></select></div>
+                @endif
                 <div><label for="date" class="text-xs text-white/60">Tanggal penggunaan</label><input type="date" id="date" name="date" value="{{ $filters['date'] ?? '' }}" class="{{ $inputClass }} [color-scheme:dark]"></div>
                 <button class="rounded-xl bg-[#f2c83f] px-5 py-2.5 text-sm font-semibold text-black">Terapkan</button><a href="{{ route('admin.bookings.index', ['tab' => $tab]) }}" class="px-3 py-2.5 text-sm text-white/60">Reset</a>
             </form>
             <div class="overflow-x-auto"><table class="w-full text-left text-sm">
-                <thead class="bg-white/5 text-xs uppercase tracking-wide text-white/45"><tr>@foreach(['Booking / Pelanggan', 'Studio / Jadwal', 'Total', 'Pembayaran', 'Status', 'Aksi'] as $heading)<th scope="col" class="px-5 py-4">{{ $heading }}</th>@endforeach</tr></thead>
+                <thead class="bg-white/5 text-xs uppercase tracking-wide text-white/45"><tr>@foreach(['Booking / Pelanggan', 'Studio / Jadwal', 'Total', 'Pembayaran', 'Verifikasi', 'Status', 'Aksi'] as $heading)<th scope="col" class="px-5 py-4 {{ $heading === 'Aksi' ? 'text-center' : '' }}">{{ $heading }}</th>@endforeach</tr></thead>
                 <tbody class="divide-y divide-white/10">
                     @forelse($bookings as $booking)
+                        @php($paymentSummary = app(\App\Services\ReservationPaymentSummary::class)->for($booking))
                         <tr class="hover:bg-white/[.025]">
                             <td class="px-5 py-4"><p class="font-semibold text-[#f2c83f]">{{ $booking->booking_code }}</p><p class="mt-2">{{ $booking->user->name }}</p><p class="mt-1 text-xs text-white/45">{{ $booking->user->email }}</p></td>
-                            <td class="whitespace-nowrap px-5 py-4"><p>{{ $booking->studioSchedule->studio->name }}</p><p class="mt-1 text-xs text-white/50">{{ \Carbon\Carbon::parse($booking->studioSchedule->date)->format('d/m/Y') }} · {{ substr($booking->studioSchedule->start_time, 0, 5) }}–{{ substr($booking->studioSchedule->end_time, 0, 5) }}</p></td>
+                            <td class="whitespace-nowrap px-5 py-4"><p>{{ $booking->studioSchedule->studio->name }}</p><p class="mt-2 text-xs text-white/50">{{ \Carbon\Carbon::parse($booking->studioSchedule->date)->format('d/m/Y') }}</p><p class="mt-1 text-xs text-white/50">{{ substr($booking->studioSchedule->start_time, 0, 5) }} &ndash; {{ substr($booking->studioSchedule->end_time, 0, 5) }}</p></td>
                             <td class="whitespace-nowrap px-5 py-4">Rp {{ number_format($booking->total_price, 0, ',', '.') }}</td>
-                            <td class="whitespace-nowrap px-5 py-4"><span class="rounded-full px-3 py-1 text-xs {{ $booking->payment_status === 'paid' ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-300' }}">{{ \App\Models\Reservation::PAYMENT_STATUSES[$booking->payment_status] }}</span></td>
+                            <td class="whitespace-nowrap px-5 py-4">{{ \App\Models\Reservation::PAYMENT_METHODS[$booking->payment_method] ?? 'Belum ditentukan' }}@if($booking->payment_type)<p class="mt-1 text-xs text-white/50">{{ \App\Models\Reservation::PAYMENT_TYPES[$booking->payment_type] ?? '-' }}</p>@endif
+                            @if($tab === 'active')<div class="mt-2"><span class="inline-block rounded-lg px-3 py-1 text-xs font-semibold {{ $paymentSummary['remaining'] <= 0 ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-300' }}">{{ $paymentSummary['remaining'] <= 0 ? 'Lunas' : ($paymentSummary['dp'] ? 'DP - Belum Lunas' : 'Menunggu Verifikasi') }}</span></div>@if($paymentSummary['dp'] && $paymentSummary['remaining'] > 0)<p class="mt-2 text-xs text-white/50">Sisa: Rp {{ number_format($booking->remaining_amount, 0, ',', '.') }}</p>@if($paymentSummary['settlement']?->status === 'pending')<p class="mt-1 text-xs text-[#f2c83f]">Pelunasan menunggu verifikasi</p>@endif @endif @endif</td>
+                            <td class="px-5 py-4"><p>{{ \App\Models\Reservation::PAYMENT_STATUSES[$booking->payment_status] }}</p>@if($booking->verified_by_name)<p class="mt-1 text-xs text-white/50">Oleh {{ $booking->verified_by_name }}</p>@endif</td>
                             <td class="whitespace-nowrap px-5 py-4"><span class="rounded-full px-3 py-1 text-xs {{ ['pending' => 'bg-amber-400/10 text-amber-300', 'confirmed' => 'bg-blue-400/10 text-blue-300', 'cancelled' => 'bg-red-400/10 text-red-300', 'completed' => 'bg-emerald-400/10 text-emerald-300'][$booking->status] }}">{{ \App\Models\Reservation::STATUSES[$booking->status] }}</span></td>
                             <td class="px-5 py-4">
                                 <div class="flex items-center gap-3">
-                                    <a href="{{ route('admin.bookings.edit', $booking) }}" aria-label="Detail booking {{ $booking->booking_code }}" class="text-[#f2c83f] hover:underline">Detail</a>
+                                    <a href="{{ route('admin.bookings.show', $booking) }}" aria-label="Detail booking {{ $booking->booking_code }}" class="text-[#f2c83f] hover:underline">Detail</a>
+                                    @if($tab === 'active' && $booking->status === 'confirmed')
+                                    <a href="{{ route('admin.bookings.edit', $booking) }}" aria-label="Edit booking {{ $booking->booking_code }}" class="text-sm text-white/60 hover:underline">Edit</a>
+                                        @if($paymentSummary['dp'] && $paymentSummary['remaining'] > 0)
+                                            <a href="{{ route('admin.bookings.edit', $booking) }}#pelunasan" aria-label="Pelunasan booking {{ $booking->booking_code }}" class="rounded-lg bg-[#f2c83f] px-3 py-2 text-xs font-semibold text-black hover:bg-[#ffda58]">{{ $paymentSummary['settlement']?->status === 'pending' ? 'Verifikasi Pelunasan' : 'Pelunasan' }}</a>
+                                        @endif
+                                    @endif
                                     @if($tab === 'requests')
                                         @foreach(['accept' => 'Terima', 'reject' => 'Tolak'] as $decision => $label)
                                             <form method="POST" action="{{ route('admin.bookings.decide', $booking) }}" data-booking-confirm data-booking-code="{{ $booking->booking_code }}">
@@ -52,7 +63,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="px-5 py-12 text-center text-white/45">Belum ada booking yang sesuai.</td></tr>
+                        <tr><td colspan="7" class="px-5 py-12 text-center text-white/45">Belum ada booking yang sesuai.</td></tr>
                     @endforelse
                 </tbody>
             </table></div>

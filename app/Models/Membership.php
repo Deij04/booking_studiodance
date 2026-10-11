@@ -9,6 +9,13 @@ class Membership extends Model
 {
     use HasFactory;
 
+    public const STATUSES = ['pending' => 'Menunggu', 'active' => 'Aktif', 'expired' => 'Berakhir', 'cancelled' => 'Dibatalkan'];
+
+    public function getEffectiveStatusAttribute(): string
+    {
+        return $this->status === 'active' && $this->end_date?->lt(today()) ? 'expired' : $this->status;
+    }
+
     protected $fillable = [
         'user_id',
         'membership_plan_id',
