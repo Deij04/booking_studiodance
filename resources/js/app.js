@@ -1,6 +1,8 @@
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import './booking-calendar';
+import './reservation-calendar';
+import './class-reservation';
 import './date-inputs';
 
 const bookingAlert = Swal.mixin({

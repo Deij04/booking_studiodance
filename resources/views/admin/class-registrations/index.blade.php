@@ -55,7 +55,7 @@
                                 @forelse($participants as $participant)
                                     <li class="flex items-center justify-between gap-3 rounded-xl bg-white/5 p-3">
                                         <div class="min-w-0"><p class="break-words text-sm font-medium">{{ $participant->user->name }}</p><p class="mt-1 text-xs text-white/50">{{ \App\Models\ClassRegistration::STATUSES[$participant->registration_status] }} &middot; {{ $participant->payment_status === 'paid' ? 'Lunas' : 'Belum Lunas' }}</p></div>
-                                        <a href="{{ route('admin.class-registrations.edit', $participant) }}" class="shrink-0 text-xs text-[#f2c83f] hover:underline" aria-label="Edit reservasi {{ $participant->user->name }}">Edit</a>
+                                        <a href="{{ route('admin.class-registrations.show', $participant) }}" class="shrink-0 text-xs text-[#f2c83f] hover:underline" aria-label="Detail reservasi {{ $participant->user->name }}">Detail</a>
                                     </li>
                                 @empty
                                     <li class="rounded-xl border border-dashed border-white/10 p-4 text-sm text-white/40">Belum ada peserta yang ikut.</li>
@@ -63,7 +63,7 @@
                             </ul>
                         </details>
                         @if($cancelled->isNotEmpty())
-                            <details class="mt-4 border-t border-white/10 pt-3"><summary class="cursor-pointer text-xs text-white/40">Dibatalkan ({{ $cancelled->count() }})</summary><ul class="mt-3 space-y-2">@foreach($cancelled as $participant)<li class="flex items-center justify-between gap-3 text-xs text-white/50"><span>{{ $participant->user->name }}</span><a href="{{ route('admin.class-registrations.edit', $participant) }}" class="text-[#f2c83f]">Edit</a></li>@endforeach</ul></details>
+                            <details class="mt-4 border-t border-white/10 pt-3"><summary class="cursor-pointer text-xs text-white/40">Dibatalkan ({{ $cancelled->count() }})</summary><ul class="mt-3 space-y-2">@foreach($cancelled as $participant)<li class="flex items-center justify-between gap-3 text-xs text-white/50"><span>{{ $participant->user->name }}</span><a href="{{ route('admin.class-registrations.show', $participant) }}" class="text-[#f2c83f]">Detail</a></li>@endforeach</ul></details>
                         @endif
                     </div>
                 </article>
@@ -90,9 +90,9 @@
                         <td class="p-4"><p class="font-semibold">{{ $registration->user->name }}</p><p class="mt-1 text-xs text-white/50">{{ $registration->user->email }}</p></td>
                         <td class="p-4"><p>{{ $registration->classSchedule->danceClass->name }}</p><p class="mt-1 text-xs text-white/50">{{ \Illuminate\Support\Carbon::parse($registration->classSchedule->date)->format('d/m/Y') }} · {{ substr($registration->classSchedule->start_time, 0, 5) }}–{{ substr($registration->classSchedule->end_time, 0, 5) }}</p><p class="mt-1 text-xs text-white/50">{{ $registration->classSchedule->studio->name }}</p></td>
                         <td class="p-4">Rp {{ number_format($registration->price, 2, ',', '.') }}</td>
-                        <td class="p-4 {{ $registration->payment_status === 'paid' ? 'text-green-300' : 'text-[#f2c83f]' }}">{{ $registration->payment_status === 'paid' ? 'Lunas' : 'Belum Lunas' }}</td>
+                        <td class="p-4 {{ $registration->payment_status === 'paid' ? 'text-green-300' : 'text-[#f2c83f]' }}">{{ \App\Models\Reservation::PAYMENT_STATUSES[$registration->payment_status] }}@if($registration->payment)<p class="mt-1 text-xs text-white/50">{{ \App\Models\Reservation::PAYMENT_METHODS[$registration->payment->payment_method] ?? '-' }} &middot; {{ \App\Models\Reservation::PAYMENT_TYPES[$registration->payment->payment_type] ?? '-' }}</p>@if($registration->payment->verified_by_name)<p class="mt-1 text-xs text-white/50">Oleh {{ $registration->payment->verified_by_name }}</p>@endif @endif</td>
                         <td class="p-4">{{ \App\Models\ClassRegistration::STATUSES[$registration->registration_status] }}</td>
-                        <td class="p-4"><a href="{{ route('admin.class-registrations.edit', $registration) }}" class="text-[#f2c83f] hover:underline">Edit</a></td>
+                        <td class="p-4"><a href="{{ route('admin.class-registrations.show', $registration) }}" class="text-[#f2c83f] hover:underline">Detail</a> <a href="{{ route('admin.class-registrations.edit', $registration) }}" class="ml-3 text-white/60 hover:underline">Edit</a></td>
                     </tr>
                 @empty
                     <tr><td colspan="6" class="p-10 text-center text-white/50">{{ $search !== '' || $status !== '' ? 'Tidak ada reservasi yang sesuai pencarian.' : 'Belum ada reservasi class.' }}</td></tr>

@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [LandingController::class, 'index'])->name('landing');
 Route::view('/about-us', 'user.about-us')->name('user.about');
+Route::get('/classes', [\App\Http\Controllers\User\ClassController::class, 'index'])->name('user.classes.index');
 Route::get('/studios', [\App\Http\Controllers\User\StudioController::class, 'index'])->name('user.studios.index');
 
 Route::middleware('guest')->group(function () {
@@ -29,6 +30,15 @@ Route::middleware('guest')->group(function () {
 
 Route::post('/logout', [AuthController::class, 'destroy'])->middleware('auth')->name('logout');
 Route::middleware('auth')->group(function () {
+    Route::get('/history/{type}/{id}', [\App\Http\Controllers\User\HistoryReservationController::class, 'show'])->where('type', 'studio|class')->whereNumber('id')->name('user.history.detail');
+    Route::post('/history/{type}/{id}/settlement', [\App\Http\Controllers\User\HistoryReservationController::class, 'settle'])->where('type', 'studio|class')->whereNumber('id')->name('user.history.settle');
+    Route::get('/classes/{danceClass}/reserve', [\App\Http\Controllers\User\ClassReservationController::class, 'create'])->name('user.classes.reserve');
+    Route::post('/classes/{danceClass}/reserve', [\App\Http\Controllers\User\ClassReservationController::class, 'store'])->name('user.classes.store');
+    Route::get('/reservations/create', [\App\Http\Controllers\User\ReservationController::class, 'create'])->name('user.reservations.create');
+    Route::post('/reservations', [\App\Http\Controllers\User\ReservationController::class, 'store'])->name('user.reservations.store');
+    Route::get('/reservations/availability/{studio}', [\App\Http\Controllers\User\ReservationController::class, 'availability'])->name('user.reservations.availability');
+    Route::get('/profile', [\App\Http\Controllers\User\AccountController::class, 'profile'])->name('user.profile');
+    Route::get('/history', [\App\Http\Controllers\User\AccountController::class, 'history'])->name('user.history');
     Route::get('/memberships', [CustomerMembershipController::class, 'index'])->name('memberships.index');
     Route::post('/memberships', [CustomerMembershipController::class, 'store'])->name('memberships.store');
 });
@@ -40,11 +50,14 @@ Route::get('/dashboard', function (Request $request) {
     ->name('dashboard');
 
 Route::middleware(['auth', 'can:access-admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::patch('/settlements/{settlement}', [\App\Http\Controllers\Admin\SettlementController::class, 'decide'])->name('settlements.decide');
+    Route::get('/settlements/{settlement}/proof', [\App\Http\Controllers\Admin\SettlementController::class, 'proof'])->name('settlements.proof');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::resource('memberships', MembershipController::class)->only(['index', 'create', 'store', 'edit', 'update']);
     Route::patch('memberships/{membership}/decision', [MembershipController::class, 'decide'])->name('memberships.decide');
     Route::resource('membership-plans', MembershipPlanController::class)->only(['create', 'store', 'edit', 'update']);
-    Route::resource('class-registrations', ClassRegistrationController::class)->only(['index', 'create', 'store', 'edit', 'update']);
+    Route::get('class-registrations/{classRegistration}/payment-proof', [ClassRegistrationController::class, 'paymentProof'])->name('class-registrations.payment-proof');
+    Route::resource('class-registrations', ClassRegistrationController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update']);
     Route::resource('class-schedules', ClassScheduleController::class)->only(['create', 'store', 'edit', 'update']);
     Route::patch('class-schedules/{classSchedule}/deactivate', [ClassScheduleController::class, 'deactivate'])->name('class-schedules.deactivate');
     Route::get('studio-operations', [StudioOperationController::class, 'index'])->name('studio-operations.index');
@@ -52,7 +65,7 @@ Route::middleware(['auth', 'can:access-admin'])->prefix('admin')->name('admin.')
     Route::post('studio-operations/blocks', [StudioOperationController::class, 'block'])->name('studio-operations.block');
     Route::patch('studio-operations/blocks/{studioSchedule}', [StudioOperationController::class, 'unblock'])->name('studio-operations.unblock');
     Route::get('booking-availability/{studio}', [BookingController::class, 'availability'])->name('bookings.availability');
-    Route::resource('bookings', BookingController::class)->only(['index', 'create', 'store', 'edit', 'update']);
+    Route::resource('bookings', BookingController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update']);
     Route::patch('bookings/{booking}/decision', [BookingController::class, 'decide'])->name('bookings.decide');
     Route::get('bookings/{booking}/payment-proof', [BookingController::class, 'paymentProof'])->name('bookings.payment-proof');
     Route::resource('users', UserController::class)->except('show');

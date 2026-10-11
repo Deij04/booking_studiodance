@@ -22,6 +22,19 @@
         .nav-links a,.nav-links button{transition:color .2s,background-color .2s,border-color .2s,box-shadow .2s}
         .nav-links>a:not(.btn){position:relative;padding:10px 0}
         .nav-links>a[aria-current]{font-weight:800}
+        .account-dropdown{position:relative;text-transform:none}
+        .account-trigger{display:grid;grid-template-columns:minmax(0,1fr) 24px 16px;align-items:center;gap:12px;max-width:240px;min-height:44px;padding:8px 16px;list-style:none;border:1px solid rgba(240,198,58,.4);border-radius:999px;background:#5b4d23;color:var(--text);font-weight:600;cursor:pointer}
+        .account-trigger::-webkit-details-marker{display:none}
+        .account-trigger>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .account-trigger svg{width:24px;height:24px;flex-shrink:0;fill:var(--gold)}
+        .account-trigger:focus-visible{outline:2px solid var(--gold);outline-offset:4px}
+        .account-menu{position:absolute;z-index:20;top:calc(100% + 10px);right:0;min-width:200px;padding:8px;border:1px solid rgba(240,198,58,.25);border-radius:16px;background:#191919;box-shadow:0 12px 30px #0006}
+        .account-menu a,.account-menu button{display:flex;align-items:center;width:100%;min-height:44px;padding:10px 14px;border:0;border-radius:8px;background:transparent;color:var(--text);font:500 13px Poppins,sans-serif;text-align:left;cursor:pointer}
+        .account-menu a:hover,.account-menu button:hover{background:rgba(240,198,58,.1);color:var(--gold)}
+        .account-menu form{margin:4px 0 0;padding-top:4px;border-top:1px solid rgba(240,198,58,.15)}
+        .account-trigger .account-chevron{display:block;width:16px;height:16px;fill:none;stroke:currentColor;justify-self:center;align-self:center;transition:transform .2s}
+        .account-dropdown[open] .account-trigger .account-chevron{transform:rotate(180deg)}
+        @media(max-width:1024px){.account-dropdown{width:100%;min-width:0;margin-top:8px}.account-trigger{max-width:none;width:100%;min-height:48px;gap:10px;padding:10px 16px}.account-menu{position:static;min-width:0;width:100%;margin-top:8px;box-shadow:none}}
         .nav-links>a:not(.btn)::after{content:"";position:absolute;left:0;right:0;bottom:3px;height:2px;background:var(--gold);transform:scaleX(0);transition:transform .2s}
         .nav-links>a:not(.btn):hover,.nav-links>a:not(.btn):focus-visible{color:var(--gold)}
         .nav-links>a:not(.btn):hover::after,.nav-links>a:not(.btn):focus-visible::after{transform:scaleX(1)}
@@ -99,10 +112,11 @@
         @media (max-width:1024px){
             html{scroll-padding-top:90px}
             .nav{position:relative;flex-direction:row;flex-wrap:wrap;gap:12px;padding:12px 20px}
-            .nav .brand{font-size:13px;min-width:0}
+            .nav .brand{font-size:13px;min-width:0;flex:1}
+            .nav .brand>div{line-height:1.4;overflow-wrap:anywhere}
             .nav-links{width:100%;flex-direction:column;align-items:stretch;gap:6px;font-size:14px}
             .nav-ready .nav-toggle{display:flex}
-            .nav-ready .nav-links{display:none;position:absolute;top:100%;left:0;right:0;width:auto;margin:0;padding:12px 20px 20px;background:#171717;border-bottom:1px solid rgba(240,198,58,.25);box-shadow:0 14px 24px rgba(0,0,0,.3);max-height:calc(100dvh - 80px);overflow-y:auto;overscroll-behavior:contain}
+            .nav-ready .nav-links{display:none;position:absolute;top:100%;left:0;right:0;width:auto;margin:0;padding:12px 20px max(20px,env(safe-area-inset-bottom));background:#171717;border-bottom:1px solid rgba(240,198,58,.25);box-shadow:0 14px 24px rgba(0,0,0,.3);max-height:calc(100dvh - var(--navigation-header-height,80px));overflow-y:auto;overscroll-behavior:contain}
             .nav-ready.menu-is-open .nav-links{display:flex}
             .menu-is-open .menu-open-icon{display:none}
             .menu-is-open .menu-close-icon{display:block}
@@ -111,6 +125,7 @@
             .nav-links>a:not(.btn):hover,.nav-links>a:not(.btn):focus-visible{background:rgba(240,198,58,.1)}
             .nav-links .btn{min-height:44px;width:100%;padding:12px 16px}
             .nav-links form{margin:0}
+            .account-menu form{margin-top:4px}
         }
         @media (max-width:600px){
             .section{padding:32px 18px}

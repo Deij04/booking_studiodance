@@ -8,7 +8,7 @@
             @endif
         </div>
     @endif
-    <input id="payment_proof" type="file" name="payment_proof" accept="image/jpeg,image/png,image/webp,application/pdf" class="{{ $inputClass }}">
+    <input id="payment_proof" type="file" name="payment_proof" accept="image/jpeg,image/png,image/webp,application/pdf" class="{{ $inputClass }} file:mr-4 file:cursor-pointer file:rounded-lg file:border-0 file:bg-[#f2c83f] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-black hover:file:bg-[#ffda58]">
     <p class="mt-2 text-xs text-white/45">Opsional. JPG, PNG, WEBP, atau PDF, maksimal 2 MB. Upload bukti tidak otomatis mengubah pembayaran menjadi lunas.{{ isset($booking) && $booking->payment_proof ? ' Pilih file baru untuk mengganti bukti tersimpan.' : '' }}</p>
     @error('payment_proof')<p class="mt-2 text-xs text-red-300">{{ $message }}</p>@enderror
 </div>

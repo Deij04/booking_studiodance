@@ -28,7 +28,7 @@
                 <div class="flex items-start justify-between gap-4"><div><h2 class="text-lg font-semibold">{{ $heading }}</h2><p class="mt-1 text-xs text-white/40">{{ $description }}</p></div><a href="{{ route('admin.bookings.index', ['tab' => $tab]) }}" class="shrink-0 text-xs text-[#f2c83f]">Lihat semua</a></div>
                 <div class="mt-5 space-y-3">
                     @forelse($reservations as $reservation)
-                        <a href="{{ route('admin.bookings.edit', $reservation) }}" class="block rounded-xl border border-white/10 p-4 transition hover:border-[#f2c83f]/40">
+                        <a href="{{ route('admin.bookings.show', $reservation) }}" class="block rounded-xl border border-white/10 p-4 transition hover:border-[#f2c83f]/40">
                             <div class="flex flex-wrap justify-between gap-2"><h3 class="text-sm font-semibold text-[#f2c83f]">{{ $reservation->booking_code }}</h3><span class="text-xs text-white/50">{{ \App\Models\Reservation::STATUSES[$reservation->status] }}</span></div>
                             <p class="mt-2 text-sm">{{ $reservation->user->name }} &middot; {{ $reservation->studioSchedule->studio->name }}</p>
                             <p class="mt-1 text-xs text-white/50">{{ \Carbon\Carbon::parse($reservation->studioSchedule->date)->format('d/m/Y') }} &middot; {{ substr($reservation->studioSchedule->start_time, 0, 5) }}–{{ substr($reservation->studioSchedule->end_time, 0, 5) }}</p>

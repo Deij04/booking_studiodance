@@ -18,7 +18,7 @@
                 <h2>Quick Links</h2>
                 <a href="{{ route('user.about') }}">About Us</a>
                 <a href="{{ route('user.studios.index') }}">Find a Studio</a>
-                <a href="{{ route('landing') }}#class">Class Schedule</a>
+                <a href="{{ route('user.classes.index') }}">Class Schedule</a>
                 <a href="{{ route('landing') }}#about">Instructors</a>
                 <a href="{{ auth()->check() && auth()->user()->can('access-admin') ? route('admin.memberships.index') : route('memberships.index') }}">Pricing Plans</a>
             </nav>

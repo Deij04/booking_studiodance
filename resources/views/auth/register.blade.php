@@ -15,11 +15,15 @@
         body { background:#0b0b0b; color:var(--text); font-family:'Poppins',sans-serif; }
         button,input,select { font:inherit; }
         a { color:var(--gold); text-underline-offset:3px; }
+        .register-back { display:inline-flex; align-items:center; gap:8px; align-self:flex-start; flex-shrink:0; margin-bottom:20px; padding:9px 13px; border:1px solid rgba(242,200,63,.3); border-radius:10px; color:var(--gold); font-size:13px; text-decoration:none; transition:background-color .2s,color .2s; }
+        .register-back svg { width:18px; height:18px; }
+        .register-back:hover { background:var(--gold); color:#111; }
+        .register-back:focus-visible { outline:2px solid var(--gold); outline-offset:4px; }
         .register-page { display:grid; grid-template-columns:40% 60%; width:100%; min-height:100vh; min-height:100dvh; }
         .visual-panel { position:relative; min-width:0; overflow:hidden; background:#090705 url('/images/Login.jpg') 44% 43% / cover no-repeat; }
         .visual-panel::after { position:absolute; inset:0; content:''; background:linear-gradient(to bottom,rgba(0,0,0,.04) 40%,rgba(0,0,0,.72)); }
-        .academy-name { position:absolute; z-index:1; bottom:clamp(40px,7vh,70px); left:clamp(22px,3vw,46px); margin:0; width:clamp(90px,10vw,140px); height:auto; object-fit:contain; }
-        .form-panel { position:relative; z-index:2; display:flex; align-items:center; justify-content:center; min-width:0; padding:clamp(18px,3vh,30px) clamp(42px,7vw,110px); background:var(--panel); }
+        .academy-name { position:absolute; z-index:1; bottom:clamp(40px,7vh,70px); left:clamp(22px,3vw,46px); margin:0; max-width:calc(100% - 44px); color:#f2c83f; font-size:clamp(16px,1.8vw,28px); font-weight:700; line-height:1.4; letter-spacing:.08em; opacity:.3; }
+        .form-panel { position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; min-width:0; padding:clamp(40px,7vh,72px) clamp(52px,6.2vw,96px) clamp(26px,6vh,62px); background:var(--panel); }
         .form-shell { width:min(100%,600px); }
         header { margin-bottom:clamp(14px,2.2vh,22px); text-align:center; }
         h1 { margin:0; color:var(--gold); font-size:clamp(29px,2.5vw,38px); font-weight:800; line-height:1; }
@@ -49,7 +53,7 @@
         @media (min-width:521px) {
             body { overflow:hidden; }
             .register-page { height:100vh; height:100dvh; min-height:0; overflow:hidden; }
-            .form-panel { min-height:0; overflow-y:auto; align-items:flex-start; }
+            .form-panel { min-height:0; overflow-y:auto; }
             .form-shell { margin-block:auto; }
         }
 
@@ -63,7 +67,8 @@
             .visual-panel { position:absolute; inset:0; background-position:48% 35%; }
             .visual-panel::after { background:rgba(0,0,0,.72); }
             .academy-name { display:none; }
-            .form-panel { width:100%; min-height:100dvh; padding:max(24px,env(safe-area-inset-top)) 16px max(24px,env(safe-area-inset-bottom)); background:rgba(17,17,17,.7); }
+            .form-panel { width:100%; min-height:100dvh; gap:24px; padding:max(16px,env(safe-area-inset-top)) 16px max(20px,env(safe-area-inset-bottom)); background:rgba(17,17,17,.7); }
+            .register-back { min-height:44px; margin-bottom:0; }
             .form-shell { width:min(100%,420px); border:1px solid rgba(255,255,255,.08); border-radius:16px; background:rgba(18,18,18,.88); padding:28px 20px; backdrop-filter:blur(5px); }
             h1 { font-size:clamp(28px,8vw,36px); }
             header { margin-bottom:28px; }
@@ -80,7 +85,7 @@
         }
 
         @media (max-height:720px) {
-            .form-panel { padding-top:28px; padding-bottom:28px; }
+            .form-panel { padding-top:22px; padding-bottom:14px; }
             .form-shell { max-width:600px; }
             header { margin-bottom:28px; }
             h1 { font-size:32px; }
@@ -95,9 +100,13 @@
 <body>
     <main class="register-page">
         <section class="visual-panel" aria-label="Orange Dance Academy">
-            <img class="academy-name" src="{{ asset('images/logoorange.png') }}" alt="Orange Dance Academy" width="120" height="141">
+            <p class="academy-name">ORANGE DANCE ACADEMY</p>
         </section>
         <section class="form-panel" aria-labelledby="register-title">
+            <a class="register-back" href="{{ route('login') }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m12 5-7 7 7 7M5 12h14"/></svg>
+                Back to Login
+            </a>
             <div class="form-shell">
                 <header>
                     <h1 id="register-title">Register</h1>

@@ -15,6 +15,7 @@ return new class extends Migration
             $table->time('start_time');
             $table->time('end_time');
             $table->enum('status', ['available', 'booked', 'blocked'])->default('available');
+            $table->string('block_reason', 500)->nullable();
             $table->timestamps();
 
             $table->index(['studio_id', 'date', 'start_time', 'end_time']);

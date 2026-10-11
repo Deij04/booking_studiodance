@@ -101,6 +101,13 @@ class MembershipController extends Controller
                 if ($data['payment_status'] !== 'paid') {
                     throw ValidationException::withMessages(['payment_status' => 'Membership harus lunas sebelum diaktifkan.']);
                 }
+                if ($current->status === 'pending' && ! $current->start_date && ! $current->end_date) {
+                    $plan = MembershipPlan::lockForUpdate()->findOrFail($current->membership_plan_id);
+                    $current->start_date = today();
+                    $current->end_date = today()->addDays($plan->duration_days - 1);
+                    $data['start_date'] = $current->start_date->toDateString();
+                    $data['end_date'] = $current->end_date->toDateString();
+                }
                 if ($user->status !== 'active' || ! $current->start_date || ! $current->end_date
                     || $current->start_date->gt(today()) || $current->end_date->lt(today())) {
                     throw ValidationException::withMessages(['status' => 'Membership hanya dapat diaktifkan untuk customer aktif dalam periode keanggotaannya.']);
@@ -110,10 +117,13 @@ class MembershipController extends Controller
                 throw ValidationException::withMessages(['status' => 'Periode membership belum berakhir.']);
             }
             if (in_array($data['status'], ['pending', 'active'])) {
-                if (! $current->start_date || ! $current->end_date || $current->end_date->lt(today())) {
+                $awaitingApproval = $data['status'] === 'pending' && ! $current->start_date && ! $current->end_date;
+                if (! $awaitingApproval && (! $current->start_date || ! $current->end_date || $current->end_date->lt(today()))) {
                     throw ValidationException::withMessages(['status' => 'Periode membership sudah berakhir atau belum lengkap. Tambahkan membership baru untuk perpanjangan.']);
                 }
-                $this->ensureNoOverlap($current->user_id, $current->start_date->toDateString(), $current->end_date->toDateString(), $current->id);
+                if (! $awaitingApproval) {
+                    $this->ensureNoOverlap($current->user_id, $current->start_date->toDateString(), $current->end_date->toDateString(), $current->id);
+                }
             }
             $current->update($data);
         });

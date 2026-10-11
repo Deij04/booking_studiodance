@@ -70,7 +70,7 @@
         .dance-class-coach{margin:4px 0 10px;color:#8f8f8f;font-size:11px}
         .dance-class-reserve{display:flex;align-items:center;justify-content:center;min-height:36px;border:1px solid #b79500;border-radius:999px;color:#ffd000;font-size:11px;font-weight:500}
         .dance-class-details{margin:14px 0 0;color:#aaa;font-size:12px;line-height:1.7}
-        .dance-class-more{display:block;width:250px;max-width:100%;min-height:36px;margin:28px auto 0;border:0;border-radius:6px;background:linear-gradient(100deg,#f4cf47,#8c7119);color:#191609;font:600 11px Poppins,sans-serif;letter-spacing:.06em;cursor:pointer}
+        .dance-class-more{display:flex;align-items:center;justify-content:center;width:250px;max-width:100%;min-height:36px;margin:28px auto 0;border:0;border-radius:6px;background:linear-gradient(100deg,#f4cf47,#8c7119);color:#191609;font:600 11px Poppins,sans-serif;letter-spacing:.06em;cursor:pointer}
         .dance-classes a:focus-visible,.dance-class-more:focus-visible{outline:2px solid #ffd000;outline-offset:4px}
         @media(max-width:900px){
             .dance-class-track{grid-auto-columns:calc((100% - 32px) / 2.5);gap:16px}
@@ -269,16 +269,7 @@
                 </article>
             @endforeach
         </div>
-        <button type="button" class="dance-class-more" aria-expanded="false" aria-controls="dance-class-detail-0 dance-class-detail-1 dance-class-detail-2 dance-class-detail-3">SEE MORE</button>
-        <script>
-            document.querySelector('.dance-class-more').addEventListener('click', (event) => {
-                const button = event.currentTarget;
-                const expanded = button.getAttribute('aria-expanded') !== 'true';
-                document.querySelectorAll('.dance-class-details').forEach((detail) => { detail.hidden = !expanded; });
-                button.setAttribute('aria-expanded', String(expanded));
-                button.textContent = expanded ? 'SEE LESS' : 'SEE MORE';
-            });
-        </script>
+        <a class="dance-class-more" href="{{ route('user.classes.index') }}">SEE MORE</a>
     </section>
 
     <section class="cta-band">

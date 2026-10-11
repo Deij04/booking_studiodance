@@ -14,14 +14,10 @@ return new class extends Migration
             $table->time('closes_at');
             $table->timestamps();
         });
-        Schema::table('studio_schedules', function (Blueprint $table) {
-            $table->string('block_reason', 500)->nullable();
-        });
     }
 
     public function down(): void
     {
-        Schema::table('studio_schedules', fn (Blueprint $table) => $table->dropColumn('block_reason'));
         Schema::dropIfExists('booking_settings');
     }
 };

@@ -33,6 +33,26 @@ class ClassRegistration extends Model
         ];
     }
 
+    public function getPaymentAmountAttribute(): float
+    {
+        return round((float) $this->price * ($this->payment?->payment_type === 'dp' ? 0.5 : 1), 2);
+    }
+
+    public function getRemainingAmountAttribute(): float
+    {
+        return round((float) $this->price - $this->payment_amount, 2);
+    }
+
+    public function payment()
+    {
+        return $this->hasOne(ClassPayment::class);
+    }
+
+    public function settlement()
+    {
+        return $this->hasOne(ReservationSettlement::class, 'class_registration_id');
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);

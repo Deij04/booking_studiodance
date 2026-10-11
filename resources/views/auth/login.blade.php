@@ -44,7 +44,7 @@
         footer { position:absolute; right:clamp(52px,6.2vw,96px); bottom:clamp(26px,6vh,62px); left:clamp(52px,6.2vw,96px); width:min(calc(100% - 104px),400px); margin:0 auto; border-top:1px solid rgba(255,255,255,.08); padding-top:clamp(12px,2.2vh,21px); color:var(--gold); font-size:clamp(8px,.75vw,11px); text-align:center; }
         .visual-panel { position:relative; min-width:0; min-height:0; overflow:hidden; background:#090705 url('/images/Login.jpg') 70% 44% / cover no-repeat; }
         .visual-panel::after { position:absolute; inset:0; content:''; background:linear-gradient(to bottom,rgba(0,0,0,.06) 45%,rgba(0,0,0,.72) 100%); pointer-events:none; }
-        .academy-name { position:absolute; z-index:1; right:clamp(22px,2.7vw,42px); bottom:clamp(45px,8vh,82px); margin:0; width:clamp(90px,10vw,140px); height:auto; object-fit:contain; }
+        .academy-name { position:absolute; z-index:1; right:clamp(22px,2.7vw,42px); bottom:clamp(45px,8vh,82px); margin:0; max-width:calc(100% - 44px); color:#f2c83f; font-size:clamp(16px,1.8vw,28px); font-weight:700; line-height:1.4; letter-spacing:.08em; opacity:.3; text-align:right; }
 
         @media (max-width:700px) {
             .login-page { display:block; position:relative; }
@@ -132,7 +132,7 @@
             <footer>&copy; 2026 ORANGEDANCEACADEMY . All rights reserved.</footer>
         </section>
         <section class="visual-panel" aria-label="Orange Dance Academy">
-            <img class="academy-name" src="{{ asset('images/logoorange.png') }}" alt="Orange Dance Academy" width="120" height="141">
+            <p class="academy-name">ORANGE DANCE ACADEMY</p>
         </section>
     </main>
     <script>

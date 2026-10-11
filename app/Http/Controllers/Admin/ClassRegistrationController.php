@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -22,7 +23,7 @@ class ClassRegistrationController extends Controller
         ]);
         $search = trim($filters['search'] ?? '');
         $status = $filters['status'] ?? '';
-        $registrations = ClassRegistration::with(['user', 'classSchedule.danceClass', 'classSchedule.studio'])
+        $registrations = ClassRegistration::with(['user', 'payment', 'classSchedule.danceClass', 'classSchedule.studio'])
             ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q
                 ->whereHas('user', fn ($q) => $q->where('name', 'like', '%'.$search.'%')->orWhere('email', 'like', '%'.$search.'%'))
                 ->orWhereHas('classSchedule.danceClass', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))))
@@ -73,9 +74,16 @@ class ClassRegistrationController extends Controller
         return to_route('admin.class-registrations.index')->with('success', 'Reservasi class berhasil ditambahkan.');
     }
 
+    public function show(ClassRegistration $classRegistration)
+    {
+        return view('admin.class-registrations.show', [
+            'registration' => $classRegistration->load(['user', 'payment', 'classSchedule.danceClass', 'classSchedule.studio']),
+        ]);
+    }
+
     public function edit(ClassRegistration $classRegistration)
     {
-        return view('admin.class-registrations.form', ['registration' => $classRegistration->load(['user', 'classSchedule.danceClass', 'classSchedule.studio'])]);
+        return view('admin.class-registrations.form', ['registration' => $classRegistration->load(['user', 'payment', 'classSchedule.danceClass', 'classSchedule.studio'])]);
     }
 
     public function update(Request $request, ClassRegistration $classRegistration)
@@ -94,15 +102,40 @@ class ClassRegistrationController extends Controller
                 $this->ensureAvailable($schedule);
             }
             if (in_array($data['registration_status'], ['confirmed', 'completed']) && $data['payment_status'] !== 'paid') {
-                throw ValidationException::withMessages(['payment_status' => 'Reservasi harus lunas sebelum dikonfirmasi atau diselesaikan.']);
+                throw ValidationException::withMessages(['payment_status' => 'Pembayaran harus terverifikasi sebelum reservasi dikonfirmasi atau diselesaikan.']);
             }
             if ($data['registration_status'] === 'completed' && Carbon::parse($schedule->date.' '.$schedule->end_time)->isFuture()) {
                 throw ValidationException::withMessages(['registration_status' => 'Class belum selesai.']);
             }
+            if ($data['registration_status'] === 'completed' && $registration->payment?->payment_type === 'dp' && $registration->settlement?->status !== 'verified') {
+                throw ValidationException::withMessages(['payment_status' => 'Pelunasan harus terverifikasi sebelum sesi diselesaikan.']);
+            }
+            if ($registration->settlement && $data['payment_status'] !== 'paid') {
+                throw ValidationException::withMessages(['payment_status' => 'DP dengan pengajuan pelunasan tidak boleh diubah. Proses pelunasan secara terpisah.']);
+            }
+            $wasVerified = $registration->payment_status === 'paid';
             $registration->update($data);
+            if ($registration->payment) {
+                if ($data['payment_status'] === 'unpaid') {
+                    $registration->payment->update(['verified_by' => null, 'verified_by_name' => null, 'verified_at' => null]);
+                } elseif (!$wasVerified) {
+                    $registration->payment->update(['verified_by' => auth()->id(), 'verified_by_name' => auth()->user()->name, 'verified_at' => now()]);
+                }
+            }
         });
 
         return to_route('admin.class-registrations.index')->with('success', 'Reservasi class berhasil diperbarui.');
+    }
+
+    public function paymentProof(ClassRegistration $classRegistration)
+    {
+        $path = $classRegistration->payment?->payment_proof;
+        abort_unless($path && str_starts_with($path, 'class-payment-proofs/') && !str_contains($path, '..'), 404);
+        abort_unless(Storage::disk('local')->exists($path), 404);
+
+        return Storage::disk('local')->response($path, null, [
+            'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     private function ensureAvailable(ClassSchedule $schedule): void
