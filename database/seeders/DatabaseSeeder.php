@@ -19,9 +19,8 @@ class DatabaseSeeder extends Seeder
             StudioSeeder::class,
             DanceClassSeeder::class,
             MembershipPlanSeeder::class,
-            StudioScheduleSeeder::class,
             ClassScheduleSeeder::class,
-            ReservationSeeder::class,
+            BookingSeeder::class,
             ClassRegistrationSeeder::class,
             MembershipSeeder::class,
         ]);

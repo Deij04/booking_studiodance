@@ -66,7 +66,7 @@
             </div>
             <div class="mt-7 flex items-center justify-end gap-4 border-t border-white/10 pt-6">
                 <a href="{{ route('admin.dance-classes.index') }}" class="text-sm text-white/60 hover:text-white">Batal</a>
-                <button type="submit" class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black hover:bg-[#ffda58]">{{ $danceClass->exists ? 'Simpan Perubahan' : 'Tambah Dance Class' }}</button>
+                <button data-save-confirm type="submit" class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black hover:bg-[#ffda58]">{{ $danceClass->exists ? 'Simpan Perubahan' : 'Tambah Dance Class' }}</button>
             </div>
         </form>
     </div>

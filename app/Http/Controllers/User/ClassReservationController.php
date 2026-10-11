@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ClassRegistration;
 use App\Models\ClassSchedule;
 use App\Models\DanceClass;
-use App\Models\Reservation;
+use App\Models\Booking;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +26,7 @@ class ClassReservationController extends Controller
                 ->orWhere(fn ($query) => $query->where('date', today()->toDateString())->where('start_time', '>', now()->format('H:i:s'))))
             ->with('studio')->withCount(['classRegistrations as occupied' => fn ($query) => $query->where('registration_status', '!=', 'cancelled')])
             ->orderBy('date')->orderBy('start_time')->get();
-        $registeredIds = $request->user()->classRegistrations()->pluck('class_schedule_id')->all();
+        $registeredIds = $request->user()->classRegistrations()->where('registration_status', '!=', 'cancelled')->pluck('class_schedule_id')->all();
 
         return view('user.classes.reservation', compact('danceClass', 'schedules', 'registeredIds'));
     }
@@ -36,8 +36,8 @@ class ClassReservationController extends Controller
         $this->authorizeCustomer($request);
         $data = $request->validate([
             'class_schedule_id' => ['required', 'integer', Rule::exists('class_schedules', 'id')->where('dance_class_id', $danceClass->id)],
-            'payment_method' => ['required', Rule::in(array_keys(Reservation::ONLINE_PAYMENT_METHODS))],
-            'payment_type' => ['required', Rule::in(array_keys(Reservation::PAYMENT_TYPES))],
+            'payment_method' => ['required', Rule::in(array_keys(Booking::ONLINE_PAYMENT_METHODS))],
+            'payment_type' => ['required', Rule::in(['full'])],
             'payment_proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
@@ -51,8 +51,8 @@ class ClassReservationController extends Controller
                     || Carbon::parse($schedule->date.' '.$schedule->start_time)->lte(now())) {
                     throw ValidationException::withMessages(['class_schedule_id' => 'Sesi kelas sudah dimulai atau tidak tersedia.']);
                 }
-                if ($schedule->classRegistrations()->where('user_id', $request->user()->id)->exists()) {
-                    throw ValidationException::withMessages(['class_schedule_id' => 'Anda sudah mendaftar sesi ini. Hubungi admin jika ingin mengaktifkan kembali pendaftaran yang dibatalkan.']);
+                if ($schedule->classRegistrations()->where('user_id', $request->user()->id)->where('registration_status', '!=', 'cancelled')->exists()) {
+                    throw ValidationException::withMessages(['class_schedule_id' => 'Anda sudah mendaftar sesi ini.']);
                 }
                 if ($schedule->classRegistrations()->where('registration_status', '!=', 'cancelled')->count() >= $schedule->capacity) {
                     throw ValidationException::withMessages(['class_schedule_id' => 'Kuota sesi kelas sudah penuh. Pilih sesi lain.']);
@@ -60,10 +60,10 @@ class ClassReservationController extends Controller
                 $registration = ClassRegistration::create([
                     'user_id' => $request->user()->id, 'class_schedule_id' => $schedule->id,
                     'registration_date' => today(), 'price' => $schedule->danceClass->price,
-                    'payment_status' => 'unpaid', 'registration_status' => 'pending',
+                    'registration_status' => 'pending',
                 ]);
                 $registration->payment()->create([
-                    'payment_method' => $data['payment_method'], 'payment_type' => $data['payment_type'],
+                    'payment_method' => $data['payment_method'], 'payment_type' => 'full',
                     'payment_proof' => $proof, 'notes' => $data['notes'] ?? null,
                 ]);
             });

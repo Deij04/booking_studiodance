@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Reservation;
+use App\Models\Booking;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -161,7 +161,7 @@ class UserManagementTest extends TestCase
     public function test_account_with_booking_history_cannot_be_deleted(): void
     {
         $customer = User::factory()->create();
-        $reservation = Reservation::factory()->create(['user_id' => $customer->id]);
+        $reservation = Booking::factory()->create(['user_id' => $customer->id]);
         $this->actingAs(User::factory()->admin()->create());
         $this->delete(route('admin.users.destroy', $customer))
             ->assertRedirect(route('admin.users.index'))->assertSessionHas('error');

@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ClassSchedule;
 use App\Models\Studio;
-use App\Models\StudioSchedule;
+use App\Models\BookingSetting;
 use App\Services\StudioConflicts;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -37,13 +37,11 @@ class StudioOperationController extends Controller
             $outside = fn ($q) => $q->whereTime('start_time', '<', $data['opens_at'].':00')
                 ->orWhereTime('end_time', '>', $data['closes_at'].':00');
             $classes = ClassSchedule::where('status', 'active')->where($upcoming)->where($outside)->exists();
-            $bookings = StudioSchedule::where($upcoming)->where($outside)
-                ->where(fn ($q) => $q->where('status', 'booked')
-                    ->orWhereHas('reservation', fn ($q) => $q->where('status', '!=', 'cancelled')))->exists();
+            $bookings = \App\Models\Booking::where($upcoming)->where($outside)->where('status', '!=', 'cancelled')->exists();
             if ($classes || $bookings) {
                 throw ValidationException::withMessages(['opens_at' => 'Masih ada kelas atau booking mendatang di luar jam baru. Sesuaikan jadwal tersebut sebelum mengubah jam operasional.']);
             }
-            DB::table('booking_settings')->updateOrInsert(['id' => 1], $data + ['created_at' => now(), 'updated_at' => now()]);
+            DB::table('booking_settings')->updateOrInsert(['kind' => 'operating_hours'], $data + ['created_at' => now(), 'updated_at' => now()]);
         });
 
         return to_route('admin.studios.index', ['tab' => 'operations'])->with('success', 'Jam operasional semua studio berhasil diperbarui.');
@@ -56,7 +54,7 @@ class StudioOperationController extends Controller
             'date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
             'start_time' => ['required', 'date_format:H:i', new \App\Rules\HalfHour],
             'end_time' => ['required', 'date_format:H:i', new \App\Rules\HalfHour, 'after:start_time'],
-            'block_reason' => ['required', 'string', 'max:500'],
+            'block_reason' => ['required', 'string', 'max:500', 'regex:/\S/u'],
         ]);
         if (Carbon::parse($data['date'].' '.$data['start_time'])->lte(now())) {
             throw ValidationException::withMessages(['start_time' => 'Waktu mulai blokir harus di masa mendatang.']);
@@ -66,21 +64,26 @@ class StudioOperationController extends Controller
             if ($studio->status !== 'active') {
                 throw ValidationException::withMessages(['studio_id' => 'Studio sudah tidak aktif.']);
             }
+            $hours = app(\App\Services\BookingHours::class)->current();
+            if ($data['start_time'] < $hours['opens_at'] || $data['end_time'] > $hours['closes_at']) {
+                throw ValidationException::withMessages(['start_time' => 'Blokir harus berada dalam jam operasional '.$hours['opens_at'].' - '.$hours['closes_at'].' WITA.']);
+            }
             if (app(StudioConflicts::class)->exists($studio, $data)) {
                 throw ValidationException::withMessages(['start_time' => 'Waktu blokir bertabrakan dengan kelas, booking, atau blokir lain.']);
             }
-            StudioSchedule::create($data + ['status' => 'blocked']);
+            $data['block_reason'] = trim($data['block_reason']);
+            BookingSetting::create($data + ['status' => 'blocked']);
         });
 
         return to_route('admin.studios.index', ['tab' => 'operations'])->with('success', 'Jadwal studio berhasil diblokir.');
     }
 
-    public function unblock(StudioSchedule $studioSchedule)
+    public function unblock(BookingSetting $bookingSetting)
     {
-        DB::transaction(function () use ($studioSchedule) {
-            Studio::whereKey($studioSchedule->studio_id)->lockForUpdate()->firstOrFail();
-            $slot = StudioSchedule::lockForUpdate()->findOrFail($studioSchedule->id);
-            if ($slot->status !== 'blocked' || $slot->reservation()->exists()) {
+        DB::transaction(function () use ($bookingSetting) {
+            Studio::whereKey($bookingSetting->studio_id)->lockForUpdate()->firstOrFail();
+            $slot = BookingSetting::lockForUpdate()->findOrFail($bookingSetting->id);
+            if ($slot->kind !== 'block' || $slot->status !== 'blocked') {
                 throw ValidationException::withMessages(['block' => 'Jadwal ini bukan blokir mandiri yang dapat dibuka.']);
             }
             $slot->update(['status' => 'available']);

@@ -4,9 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\BookingActivity;
-use App\Models\Reservation;
+use App\Models\Booking;
 use App\Models\Studio;
-use App\Models\StudioSchedule;
 use App\Models\User;
 use App\Services\BookingAvailability;
 use Carbon\Carbon;
@@ -32,31 +31,30 @@ class BookingController extends Controller
         $filters = $request->validate([
             'tab' => ['nullable', Rule::in(['requests', 'history', 'active'])],
             'search' => ['nullable', 'string', 'max:100'],
-            'status' => ['nullable', Rule::in(array_keys(Reservation::STATUSES))],
+            'status' => ['nullable', Rule::in(array_keys(Booking::STATUSES))],
             'payment_type' => ['nullable', Rule::in(['full', 'dp'])],
             'date' => ['nullable', 'date_format:Y-m-d'],
         ]);
         $filters['search'] = trim($filters['search'] ?? '');
         $tab = $filters['tab'] ?? 'requests';
         $tabs = self::TABS;
-        $counts = Reservation::query()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
-        $tabCounts = collect($tabs)->map(fn ($item) => collect($item['statuses'])->sum(fn ($status) => $counts[$status] ?? 0));
-        $bookings = Reservation::with(['user', 'studioSchedule.studio', 'settlement'])
-            ->whereIn('status', $tabs[$tab]['statuses'])
+        $tabCounts = collect($tabs)->map(fn ($item, $key) => Booking::inBookingTab($key)->count());
+        $bookings = Booking::with(['user', 'studio', 'payment', 'settlement'])
+            ->inBookingTab($tab)
             ->when($filters['search'] !== '', function ($query) use ($filters) {
                 $query->where(function ($query) use ($filters) {
                     $term = '%'.$filters['search'].'%';
                     $query->where('booking_code', 'like', $term)
                         ->orWhereHas('user', fn ($user) => $user->where('name', 'like', $term)->orWhere('email', 'like', $term))
-                        ->orWhereHas('studioSchedule.studio', fn ($studio) => $studio->where('name', 'like', $term));
+                        ->orWhereHas('studio', fn ($studio) => $studio->where('name', 'like', $term));
                 });
             })
             ->when($tab === 'history' ? ($filters['status'] ?? null) : null, fn ($query, $status) => $query->where('status', $status))
-            ->when($tab === 'requests' ? ($filters['payment_type'] ?? null) : null, fn ($query, $type) => $query->where('payment_type', $type))
-            ->when($filters['date'] ?? null, fn ($query, $date) => $query->whereHas('studioSchedule', fn ($schedule) => $schedule->whereDate('date', $date)))
+            ->when($tab === 'requests' ? ($filters['payment_type'] ?? null) : null, fn ($query, $type) => $query->whereHas('payment', fn ($p) => $p->where('payment_type', $type)))
+            ->when($filters['date'] ?? null, fn ($query, $date) => $query->whereDate('date', $date))
             ->when($tab === 'active', fn ($query) => $query
-                ->orderBy(StudioSchedule::select('date')->whereColumn('studio_schedules.id', 'reservations.studio_schedule_id'))
-                ->orderBy(StudioSchedule::select('start_time')->whereColumn('studio_schedules.id', 'reservations.studio_schedule_id')))
+                ->orderByRaw("CASE WHEN EXISTS (SELECT 1 FROM payments WHERE payments.booking_id = bookings.id AND payments.payment_stage = 'settlement' AND payments.verification_status = 'pending') THEN 0 ELSE 1 END")
+                ->orderBy('date')->orderBy('start_time'))
             ->latest('id')->paginate(10)->withQueryString();
 
         return view('admin.bookings.index', compact('bookings', 'filters', 'tab', 'tabs', 'tabCounts'));
@@ -74,14 +72,23 @@ class BookingController extends Controller
     public function availability(Request $request, Studio $studio)
     {
         abort_unless($studio->status === 'active', 404);
-        $data = $request->validate(['month' => ['required', 'date_format:Y-m']]);
-
-        return response()->json(['days' => app(BookingAvailability::class)->month($studio, $data['month'])])
-            ->header('Cache-Control', 'private, no-store');
+        $data = $request->validate(['month' => ['required', 'date_format:Y-m'], 'booking_id' => ['nullable', 'integer', 'exists:bookings,id']]);
+        $exclude = null;
+        if (!empty($data['booking_id'])) {
+            $record = Booking::findOrFail($data['booking_id']);
+            abort_unless($record->status === 'confirmed' && $record->payment_status === 'paid', 403);
+            $exclude = $record->id;
+        }
+        return response()->json([
+            'days' => app(BookingAvailability::class)->month($studio, $data['month'], $exclude),
+            'hours' => app(\App\Services\BookingHours::class)->current(),
+            'step' => config('booking.step_minutes'), 'minimum' => config('booking.minimum_minutes'),
+        ])->header('Cache-Control', 'private, no-store');
     }
 
     public function store(Request $request): RedirectResponse
     {
+        $request->merge(['payment_status' => 'paid']);
         return $this->storeBooking($request);
     }
 
@@ -97,23 +104,26 @@ class BookingController extends Controller
             'date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
             'start_time' => ['required', 'date_format:H:i', new \App\Rules\HalfHour],
             'end_time' => ['required', 'date_format:H:i', new \App\Rules\HalfHour, 'after:start_time'],
-            'purpose' => ['nullable', 'string', 'max:255'],
+            'purpose' => ['nullable', Rule::in(Booking::PURPOSES)],
             'payment_proof' => [$customer ? 'required' : 'nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
-            'payment_status' => ['required', Rule::in(array_keys(Reservation::PAYMENT_STATUSES))],
-            'payment_method' => ['nullable', Rule::in(array_keys(Reservation::PAYMENT_METHODS))],
-            'payment_type' => ['nullable', Rule::in(array_keys(Reservation::PAYMENT_TYPES))],
+            'payment_status' => ['required', Rule::in(array_keys(Booking::PAYMENT_STATUSES))],
+            'payment_method' => ['nullable', Rule::in(array_keys(Booking::PAYMENT_METHODS))],
+            'payment_type' => ['nullable', Rule::in(array_keys(Booking::PAYMENT_TYPES))],
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
         if ($customer) {
             $details = $request->validate([
-                'payment_method' => ['required', Rule::in(array_keys(Reservation::ONLINE_PAYMENT_METHODS))],
+                'payment_method' => ['required', Rule::in(array_keys(Booking::ONLINE_PAYMENT_METHODS))],
                 'booking_name' => ['required', 'string', 'max:255'],
-                'purpose' => ['required', Rule::in(['Group Training', 'Private Practice', 'Dance Rehearsal', 'Workshop', 'Other'])],
+                'purpose' => ['required', Rule::in(Booking::PURPOSES)],
             ]);
             $data = array_merge($data, $details);
         }
         $start = Carbon::parse($data['date'].' '.$data['start_time']);
         $end = Carbon::parse($data['date'].' '.$data['end_time']);
+        if ($start->diffInMinutes($end) < config('booking.minimum_minutes')) {
+            throw ValidationException::withMessages(['end_time' => 'Minimal durasi penyewaan studio adalah '.config('booking.minimum_minutes').' menit.']);
+        }
         if ($start->isPast()) {
             throw ValidationException::withMessages(['start_time' => 'Jam mulai booking harus di masa mendatang.']);
         }
@@ -126,34 +136,26 @@ class BookingController extends Controller
             if (! in_array($data['end_time'], $available[$data['date']][$data['start_time']] ?? [], true)) {
                 throw ValidationException::withMessages(['start_time' => 'Jam yang dipilih sudah terisi atau di luar jam operasional. Pilih ulang tanggal dan jam.']);
             }
-            $overlap = fn ($query) => $query->whereDate('date', $data['date'])
-                ->whereTime('start_time', '<', $data['end_time'].':00')->whereTime('end_time', '>', $data['start_time'].':00');
-            $occupied = $overlap($studio->studioSchedules())->where(fn ($query) => $query
-                ->whereIn('status', ['booked', 'blocked'])
-                ->orWhereHas('reservation', fn ($booking) => $booking->where('status', '!=', 'cancelled')))->exists();
-            if ($occupied || $overlap($studio->classSchedules())->where('status', 'active')->exists()) {
-                throw ValidationException::withMessages(['start_time' => 'Jadwal bentrok dengan booking, kelas, atau jadwal yang diblokir. Pilih waktu lain.']);
-            }
             $price = round((float) $studio->price_per_hour * $start->diffInMinutes($end) / 60, 2);
             if ($price > 9999999999.99) {
                 throw ValidationException::withMessages(['end_time' => 'Total biaya melebihi batas. Kurangi durasi booking.']);
             }
-            $schedule = $studio->studioSchedules()->create([
-                'date' => $data['date'], 'start_time' => $data['start_time'], 'end_time' => $data['end_time'], 'status' => 'booked',
-            ]);
-            $booking = Reservation::create([
+            $booking = Booking::create([
                 'booking_code' => 'RES-'.now()->format('Ymd').'-'.Str::upper((string) Str::ulid()),
-                'user_id' => $data['user_id'], 'studio_schedule_id' => $schedule->id,
+                'user_id' => $data['user_id'], 'studio_id' => $studio->id,
+                'date' => $data['date'], 'start_time' => $data['start_time'], 'end_time' => $data['end_time'],
                 'purpose' => $data['purpose'] ?? null, 'notes' => $data['notes'] ?? null,
-                'total_price' => $price, 'payment_status' => $data['payment_status'], 'status' => $customer ? 'pending' : 'confirmed',
-                'payment_proof' => $proof,
+                'total_price' => $price, 'status' => $customer ? 'pending' : 'confirmed',
                 'booking_name' => $data['booking_name'] ?? null,
-                'payment_method' => $data['payment_method'] ?? null,
-                'payment_type' => $data['payment_type'] ?? 'full',
-                'verified_by' => !$customer && $data['payment_status'] === 'paid' ? $request->user()->id : null,
-                'verified_by_name' => !$customer && $data['payment_status'] === 'paid' ? $request->user()->name : null,
-                'verified_at' => !$customer && $data['payment_status'] === 'paid' ? now() : null,
             ]);
+            $booking->payment()->create([
+                'payment_stage' => 'initial', 'amount' => round($price * (($data['payment_type'] ?? 'full') === 'dp' ? 0.5 : 1), 2),
+                'payment_proof' => $proof, 'payment_method' => $data['payment_method'] ?? 'cash',
+                'payment_type' => $data['payment_type'] ?? 'full', 'verification_status' => $customer ? 'pending' : 'verified',
+                'verified_by' => $customer ? null : $request->user()->id,
+                'verified_by_name' => $customer ? null : $request->user()->name, 'verified_at' => $customer ? null : now(),
+            ]);
+            $booking->unsetRelation('payment');
             $this->recordActivity($booking, 'created', []);
         });
 
@@ -164,128 +166,149 @@ class BookingController extends Controller
         return to_route('admin.bookings.index', ['tab' => 'active'])->with('success', 'Booking berhasil dibuat dan langsung dikonfirmasi.');
     }
 
-    public function decide(Request $request, Reservation $booking): RedirectResponse
+    public function decide(Request $request, Booking $booking): RedirectResponse
     {
         $data = $request->validate([
             'decision' => ['required', Rule::in(['accept', 'reject'])],
             'rejection_reason' => ['required_if:decision,reject', 'nullable', 'string', 'max:1000', 'regex:/\S/u'],
         ]);
-        DB::transaction(function () use ($booking, $data) {
-            $booking = Reservation::whereKey($booking->id)->lockForUpdate()->firstOrFail();
-            if ($booking->status !== 'pending') {
+        DB::transaction(function () use ($booking, $data, $request) {
+            Studio::whereKey($booking->studio_id)->lockForUpdate()->firstOrFail();
+            $booking = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            if ($booking->status !== 'pending' && !($booking->status === 'confirmed' && $booking->payment_status === 'unpaid')) {
                 throw ValidationException::withMessages(['decision' => 'Pengajuan ini sudah diproses. Muat ulang daftar booking.']);
             }
-            $schedule = StudioSchedule::whereKey($booking->studio_schedule_id)->lockForUpdate()->firstOrFail();
             $accept = $data['decision'] === 'accept';
-            if ($accept && $schedule->status === 'blocked') {
-                throw ValidationException::withMessages(['decision' => 'Jadwal studio sedang diblokir.']);
+            if ($accept && app(\App\Services\StudioConflicts::class)->exists($booking->studio, $booking->only(['date', 'start_time', 'end_time']), null, $booking->id)) {
+                throw ValidationException::withMessages(['decision' => 'Jadwal booking bertabrakan dengan jadwal lain.']);
             }
-            $before = $booking->getAttributes();
-            $booking->update([
-                'status' => $accept ? 'confirmed' : 'cancelled',
-                'rejection_reason' => $accept ? null : trim($data['rejection_reason']),
-            ]);
+            $before = $this->activityAttributes($booking);
+            if ($booking->payment && $booking->payment_status !== 'paid') {
+                $booking->payment->update(['verification_status' => $accept ? 'verified' : 'rejected',
+                    'verified_by' => $request->user()->id, 'verified_by_name' => $request->user()->name, 'verified_at' => now(),
+                    'rejection_reason' => $accept ? null : trim($data['rejection_reason'])]);
+            }
+            $booking->update(['status' => $accept ? 'confirmed' : 'cancelled',
+                'rejection_reason' => $accept ? null : trim($data['rejection_reason'])]);
             $this->recordActivity($booking, $accept ? 'accepted' : 'rejected', $before);
-            if ($schedule->status !== 'blocked') {
-                $schedule->update(['status' => $accept ? 'booked' : 'available']);
-            }
         });
 
+        app(\App\Services\BookingCompletion::class)->run($booking->id);
         return to_route('admin.bookings.index')->with('success', $data['decision'] === 'accept'
-            ? 'Pengajuan diterima dan masuk ke Booking Aktif.'
+            ? ($booking->fresh()->status === 'completed' ? 'Pengajuan terverifikasi dan masuk Riwayat karena waktu penyewaan sudah berakhir.' : 'Pengajuan diterima dan masuk ke Booking Aktif.')
             : 'Pengajuan ditolak dan dipindahkan ke Riwayat.');
     }
 
-    public function show(Reservation $booking): View
+    public function settle(Request $request, Booking $booking): RedirectResponse
     {
-        $booking->load(['user', 'studioSchedule.studio']);
+        $data = $request->validate([
+            'payment_method' => ['required', Rule::in(array_keys(Booking::PAYMENT_METHODS))],
+            'payment_proof' => [Rule::requiredIf($request->input('payment_method') !== 'cash'), 'nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
+        ]);
+        $path = $request->file('payment_proof')?->store('settlement-proofs', 'local');
+        $oldPath = null;
+        try {
+            DB::transaction(function () use ($booking, $request, $data, $path, &$oldPath) {
+                $booking = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+                $summary = app(\App\Services\PaymentSummary::class)->for($booking);
+                if (!$summary['canSettle']) {
+                    throw ValidationException::withMessages(['payment_proof' => 'Pelunasan hanya dapat dicatat untuk booking aktif dengan DP terverifikasi dan tanpa pengajuan pelunasan yang sedang diproses.']);
+                }
+                $oldPath = null;
+                $booking->settlements()->create([
+                    'amount' => $summary['remaining'], 'payment_method' => $data['payment_method'],
+                    'payment_proof' => $path ?? '', 'verification_status' => 'verified', 'payment_stage' => 'settlement',
+                    'verified_by' => $request->user()->id, 'verified_by_name' => $request->user()->name, 'verified_at' => now(),
+                ]);
+                $before = $this->activityAttributes($booking);
+                app(\App\Services\BookingCompletion::class)->run($booking->id);
+                $booking->refresh();
+                $this->recordActivity($booking, 'updated', $before);
+            });
+        } catch (\Throwable $error) {
+            if ($path) Storage::disk('local')->delete($path);
+            throw $error;
+        }
+        if ($oldPath) Storage::disk('local')->delete($oldPath);
+        return to_route('admin.bookings.index', ['tab' => $booking->fresh()->status === 'completed' ? 'history' : 'active'])->with('success', 'Pelunasan terverifikasi oleh '.$request->user()->name.'. Booking selesai setelah waktu penyewaan berakhir.');
+    }
+
+    public function show(Booking $booking): View
+    {
+        $booking->load(['user', 'studio']);
         $activities = auth()->user()->role === 'super_admin'
-            ? BookingActivity::where('reservation_id', $booking->id)->latest('id')->paginate(10)
+            ? BookingActivity::where('booking_id', $booking->id)->latest('id')->paginate(10)
             : null;
 
         return view('admin.bookings.edit', ['booking' => $booking, 'activities' => $activities, 'readOnly' => true]);
     }
 
-    public function edit(Reservation $booking): View
+    public function edit(Booking $booking): View
     {
-        abort_unless($booking->status === 'confirmed', 403, 'Hanya booking aktif yang dapat diedit.');
-        $booking->load(['user', 'studioSchedule.studio']);
+        abort_unless($booking->status === 'confirmed' && $booking->payment_status === 'paid', 403, 'Hanya booking aktif yang dapat diedit.');
+        $booking->load(['user', 'studio']);
 
         $activities = auth()->user()->role === 'super_admin'
-            ? BookingActivity::where('reservation_id', $booking->id)->latest('id')->paginate(10)
+            ? BookingActivity::where('booking_id', $booking->id)->latest('id')->paginate(10)
             : null;
 
-        return view('admin.bookings.edit', compact('booking', 'activities'));
+        return view('admin.bookings.edit', ['booking' => $booking, 'activities' => $activities, 'studios' => Studio::where('status', 'active')->orderBy('name')->get()]);
     }
 
-    public function update(Request $request, Reservation $booking): RedirectResponse
+    public function settlementForm(Booking $booking): View
     {
-        abort_unless($booking->status === 'confirmed', 403, 'Hanya booking aktif yang dapat diedit.');
-        $data = $request->validate([
-            'rejection_reason' => ['nullable', 'string', 'max:1000'],
-            'payment_proof' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
-            'status' => ['required', Rule::in(array_keys(Reservation::STATUSES))],
-            'payment_status' => ['required', Rule::in(array_keys(Reservation::PAYMENT_STATUSES))],
-            'payment_method' => ['nullable', Rule::in(array_keys(Reservation::PAYMENT_METHODS))],
-            'payment_type' => ['nullable', Rule::in(array_keys(Reservation::PAYMENT_TYPES))],
-            'notes' => ['nullable', 'string', 'max:5000'],
-        ]);
-
-        unset($data['payment_proof']);
-        $this->saveWithProof($request, function ($proof) use ($booking, $data) {
-            $booking = Reservation::whereKey($booking->id)->lockForUpdate()->firstOrFail();
-            abort_unless($booking->status === 'confirmed', 403, 'Hanya booking aktif yang dapat diedit.');
-            $schedule = StudioSchedule::whereKey($booking->studio_schedule_id)->lockForUpdate()->firstOrFail();
-            if ($booking->status === 'pending' && $data['status'] === 'cancelled') {
-                if (! preg_match('/\S/u', $data['rejection_reason'] ?? '')) {
-                    throw ValidationException::withMessages(['rejection_reason' => 'Alasan penolakan wajib diisi.']);
-                }
-                $data['rejection_reason'] = trim($data['rejection_reason']);
-            } else {
-                unset($data['rejection_reason']);
-            }
-            if ($booking->status === 'confirmed' && $data['status'] === 'pending') {
-                throw ValidationException::withMessages(['status' => 'Booking yang sudah diterima tidak dapat dikembalikan ke pengajuan.']);
-            }
-            if (in_array($booking->status, ['cancelled', 'completed'], true) && $data['status'] !== $booking->status) {
-                throw ValidationException::withMessages(['status' => 'Booking yang dibatalkan atau selesai tidak dapat diaktifkan kembali.']);
-            }
-            if ($data['status'] === 'completed' && $data['payment_status'] !== 'paid') {
-                throw ValidationException::withMessages(['payment_status' => 'Pembayaran harus terverifikasi sebelum booking diselesaikan.']);
-            }
-            $paymentType = $data['payment_type'] ?? $booking->payment_type;
-            if ($data['status'] === 'completed' && $paymentType === 'dp' && $booking->settlement?->status !== 'verified') {
-                throw ValidationException::withMessages(['payment_status' => 'Pelunasan harus terverifikasi sebelum penyewaan diselesaikan.']);
-            }
-            if ($booking->settlement && (($data['payment_type'] ?? $booking->payment_type) !== $booking->payment_type || $data['payment_status'] !== 'paid')) {
-                throw ValidationException::withMessages(['payment_status' => 'DP dengan pengajuan pelunasan tidak boleh diubah. Proses pelunasan secara terpisah.']);
-            }
-            if ($data['status'] !== 'cancelled' && $schedule->status === 'blocked') {
-                throw ValidationException::withMessages(['status' => 'Jadwal studio sedang diblokir.']);
-            }
-            $oldProof = $booking->payment_proof;
-            $before = $booking->getAttributes();
-            if ($proof) {
-                $data['payment_proof'] = $proof;
-            }
-            if ($data['payment_status'] === 'unpaid') {
-                $data += ['verified_by' => null, 'verified_by_name' => null, 'verified_at' => null];
-            } elseif ($booking->payment_status !== 'paid' || $proof) {
-                $data += ['verified_by' => auth()->id(), 'verified_by_name' => auth()->user()->name, 'verified_at' => now()];
-            }
-            $booking->update($data);
-            $this->recordActivity($booking, 'updated', $before);
-            if ($schedule->status !== 'blocked') {
-                $schedule->update(['status' => $data['status'] === 'cancelled' ? 'available' : 'booked']);
-            }
-
-            return $proof ? $oldProof : null;
-        });
-
-        return to_route('admin.bookings.index')->with('success', 'Booking berhasil diperbarui.');
+        abort_unless($booking->status === 'confirmed' && $booking->payment_status === 'paid' && $booking->payment_type === 'dp', 403);
+        $booking->load(['user', 'studio', 'payment', 'settlement']);
+        return view('admin.bookings.edit', ['booking' => $booking, 'activities' => null, 'paymentOnly' => true]);
     }
 
-    public function paymentProof(Reservation $booking)
+    public function cancel(Request $request, Booking $booking): RedirectResponse
+    {
+        DB::transaction(function () use ($booking) {
+            Studio::whereKey($booking->studio_id)->lockForUpdate()->firstOrFail();
+            $booking = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            abort_unless($booking->status === 'confirmed' && $booking->payment_status === 'paid', 403);
+            $before = $this->activityAttributes($booking);
+            $booking->update(['status' => 'cancelled']);
+            $this->recordActivity($booking, 'updated', $before);
+        });
+        return to_route('admin.bookings.index', ['tab' => 'history'])->with('success', 'Booking dibatalkan. Pembayaran terverifikasi tetap tercatat.');
+    }
+
+    public function update(Request $request, Booking $booking): RedirectResponse
+    {
+        abort_unless($booking->status === 'confirmed' && $booking->payment_status === 'paid', 403);
+        $data = $request->validate([
+            'studio_id' => ['required', 'integer', Rule::exists('studios', 'id')->where('status', 'active')],
+            'date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
+            'start_time' => ['required', 'date_format:H:i', new \App\Rules\HalfHour],
+            'end_time' => ['required', 'date_format:H:i', new \App\Rules\HalfHour, 'after:start_time'],
+            'payment_status' => ['prohibited'], 'payment_type' => ['prohibited'], 'payment_method' => ['prohibited'],
+            'payment_proof' => ['prohibited'], 'status' => ['prohibited'], 'notes' => ['prohibited'],
+        ]);
+        DB::transaction(function () use ($booking, $data) {
+            // Lock studios in a stable order, as new bookings also lock their studio.
+            $oldStudioId = $booking->studio_id;
+            Studio::whereIn('id', [$oldStudioId, $data['studio_id']])->orderBy('id')->lockForUpdate()->get();
+            $booking = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            abort_unless($booking->status === 'confirmed' && $booking->payment_status === 'paid', 403);
+            $studio = Studio::whereKey($data['studio_id'])->where('status', 'active')->firstOrFail();
+            $days = app(BookingAvailability::class)->month($studio, substr($data['date'], 0, 7), $booking->id);
+            if (!in_array($data['end_time'], $days[$data['date']][$data['start_time']] ?? [], true)) {
+                throw ValidationException::withMessages(['start_time' => 'Jadwal terisi, sudah lewat, atau durasi kurang dari satu jam. Pilih jadwal lain.']);
+            }
+            $oldSchedule = $booking->only(['studio_id', 'date', 'start_time', 'end_time']);
+            $booking->update($data);
+            // Keep verified payment amounts and the agreed total unchanged.
+            $booking->touch();
+            BookingActivity::create(['booking_id' => $booking->id, 'actor_id' => auth()->id(),
+                'actor_name' => auth()->user()->name, 'actor_email' => auth()->user()->email, 'actor_role' => auth()->user()->role,
+                'action' => 'updated', 'changes' => ['schedule' => ['before' => 'Studio #'.$oldSchedule['studio_id'].' '.$oldSchedule['date'].' '.$oldSchedule['start_time'].' - '.$oldSchedule['end_time'], 'after' => $studio->name.' '.$data['date'].' '.$data['start_time'].' - '.$data['end_time']]]]);
+        });
+        return to_route('admin.bookings.index', ['tab' => 'active'])->with('success', 'Studio dan jadwal booking diperbarui.');
+    }
+
+    public function paymentProof(Booking $booking)
     {
         $path = $booking->payment_proof;
         abort_unless($path && str_starts_with($path, 'payment-proofs/') && ! str_contains($path, '..'), 404);
@@ -313,12 +336,18 @@ class BookingController extends Controller
         }
     }
 
-    private function recordActivity(Reservation $booking, string $action, array $before): void
+    private function activityAttributes(Booking $booking): array
+    {
+        return $booking->getAttributes() + collect(['payment_status', 'payment_method', 'payment_type', 'payment_proof', 'verified_by', 'verified_by_name', 'verified_at'])
+            ->mapWithKeys(fn ($field) => [$field => $booking->{$field}])->all();
+    }
+
+    private function recordActivity(Booking $booking, string $action, array $before): void
     {
         $changes = [];
-        foreach (['user_id', 'studio_schedule_id', 'purpose', 'total_price', 'status', 'payment_status', 'payment_method', 'payment_type', 'verified_by', 'verified_by_name', 'verified_at', 'notes', 'payment_proof', 'rejection_reason'] as $field) {
+        foreach (['user_id', 'studio_id', 'purpose', 'total_price', 'status', 'payment_status', 'payment_method', 'payment_type', 'verified_by', 'verified_by_name', 'verified_at', 'notes', 'payment_proof', 'rejection_reason'] as $field) {
             $old = $before[$field] ?? null;
-            $new = $booking->getAttributes()[$field] ?? null;
+            $new = $this->activityAttributes($booking)[$field] ?? null;
             if ((string) $old !== (string) $new) {
                 $changes[$field] = $field === 'payment_proof'
                     ? ['before' => $old ? 'Bukti sebelumnya' : null, 'after' => $new ? 'Bukti baru diunggah' : null]
@@ -330,7 +359,7 @@ class BookingController extends Controller
         }
         $actor = auth()->user();
         BookingActivity::create([
-            'reservation_id' => $booking->id, 'actor_id' => $actor->id,
+            'booking_id' => $booking->id, 'actor_id' => $actor->id,
             'actor_name' => $actor->name, 'actor_email' => $actor->email, 'actor_role' => $actor->role,
             'action' => $action, 'changes' => $changes,
         ]);

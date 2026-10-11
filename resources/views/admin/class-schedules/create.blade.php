@@ -29,7 +29,7 @@
         @if($danceClasses->isEmpty() || $studios->isEmpty())
             <p role="status" class="mt-4 text-sm text-[#f2c83f]">Tambahkan kelas dan studio aktif melalui menu Dance Classes dan Kelola Studio terlebih dahulu.</p>
         @endif
-        <div class="mt-7 flex justify-end gap-4 border-t border-white/10 pt-6"><a href="{{ route('admin.class-registrations.index', ['tab' => 'classes']) }}" class="px-3 py-3 text-sm text-white/60">Batal</a><button type="submit" @disabled($danceClasses->isEmpty() || $studios->isEmpty()) class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black disabled:opacity-50">Simpan Jadwal</button></div>
+        <div class="mt-7 flex justify-end gap-4 border-t border-white/10 pt-6"><a href="{{ route('admin.class-registrations.index', ['tab' => 'classes']) }}" class="px-3 py-3 text-sm text-white/60">Batal</a><button data-save-confirm type="submit" @disabled($danceClasses->isEmpty() || $studios->isEmpty()) class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black disabled:opacity-50">Simpan Jadwal</button></div>
     </form>
 </div>
 @endsection

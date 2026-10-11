@@ -15,6 +15,30 @@ if (form) {
     const initiallyDisabled = submit.disabled;
     const oldDate = date.value;
     let days = {};
+    let hours = { opens_at: '08:00', closes_at: '22:00' };
+    let step = 30;
+    let minimum = 60;
+    const minutes = value => { const [h, m] = value.split(':').map(Number); return h * 60 + m; };
+    const clock = value => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
+    const slotPanel = document.createElement('div');
+    slotPanel.className = 'mt-4 flex flex-wrap gap-2';
+    slotPanel.setAttribute('aria-label', 'Jam mulai: merah tidak tersedia');
+    status.after(slotPanel);
+    const showSlots = () => {
+        slotPanel.replaceChildren();
+        if (!date.value) return;
+        for (let time = minutes(hours.opens_at); time + minimum <= minutes(hours.closes_at); time += step) {
+            const value = clock(time);
+            const available = Boolean(days[date.value]?.[value]?.length);
+            const button = document.createElement('button');
+            button.type = 'button'; button.textContent = value; button.disabled = !available;
+            button.title = available ? 'Pilih jam mulai' : 'Terisi atau tidak tersedia untuk minimal 1 jam';
+            button.className = available ? 'rounded-lg border border-[#f2c83f]/30 px-3 py-2 text-sm text-[#f2c83f]' : 'rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-300';
+            button.setAttribute('aria-pressed', String(start.value === value));
+            button.addEventListener('click', () => { start.value = value; start.dispatchEvent(new Event('change')); showSlots(); });
+            slotPanel.append(button);
+        }
+    };
     let sequence = 0;
     let loading = false;
     let restore = true;
@@ -32,15 +56,18 @@ if (form) {
         updateSubmit();
     };
     const updateTimes = () => {
-        options(start, Object.keys(days[date.value] ?? {}), 'Pilih jam mulai', restore ? start.dataset.old : '');
-        updateEnd(restore ? end.dataset.old : '');
-        if (date.value) status.textContent = 'Pilih jam yang tersedia. Durasi tidak dapat melewati jam yang sudah terisi.';
+        const selectedStart = restore ? start.dataset.old : start.value;
+        const selectedEnd = restore ? end.dataset.old : end.value;
+        options(start, Object.keys(days[date.value] ?? {}), 'Pilih jam mulai', selectedStart);
+        updateEnd(selectedEnd);
+        showSlots();
+        if (date.value) status.textContent = 'Pilih jam tersedia. Merah: terisi atau tidak tersedia. Minimal 1 jam, waktu WITA.';
     };
     const picker = flatpickr(date, {
         locale: Indonesian, dateFormat: 'Y-m-d', altInput: true, altFormat: 'd F Y',
         minDate: form.dataset.today, disableMobile: true, allowInput: false,
         disable: [() => true],
-        onChange: () => { restore = false; updateTimes(); },
+        onChange: () => { restore = false; load(); },
         onMonthChange: () => load(), onYearChange: () => load(),
         onOpen: () => load(),
     });
@@ -48,9 +75,12 @@ if (form) {
     async function load() {
         const requestId = ++sequence;
         const selectedDate = restore ? oldDate : date.value;
+        const selectedStart = restore ? start.dataset.old : start.value;
+        const selectedEnd = restore ? end.dataset.old : end.value;
         loading = true;
         retry.hidden = true;
         days = {};
+        slotPanel.replaceChildren();
         picker.set('disable', [() => true]);
         options(start, [], 'Pilih tanggal terlebih dahulu');
         updateEnd();
@@ -62,19 +92,24 @@ if (form) {
             return;
         }
         try {
-            const response = await fetch(`${form.dataset.availabilityUrl}/${studio.value}?month=${key(picker.currentYear, picker.currentMonth)}`, {
+            const response = await fetch(`${form.dataset.availabilityUrl}/${studio.value}?month=${key(picker.currentYear, picker.currentMonth)}${form.dataset.bookingId ? `&booking_id=${form.dataset.bookingId}` : ''}`, {
                 headers: { Accept: 'application/json' }, cache: 'no-store',
             });
             if (!response.ok) throw new Error('availability');
             const data = await response.json();
             if (requestId !== sequence) return;
             days = data.days;
+            hours = data.hours ?? hours;
+            step = data.step ?? step;
+            minimum = data.minimum ?? minimum;
             picker.set('disable', [(day) => !Object.keys(days[flatpickr.formatDate(day, 'Y-m-d')] ?? {}).length]);
             const selected = selectedDate;
             if (selected && Object.keys(days[selected] ?? {}).length) picker.setDate(selected, false);
             else picker.clear(false);
             status.textContent = 'Tanggal penuh dinonaktifkan. Pilih tanggal untuk melihat jam tersedia.';
-            updateTimes();
+            options(start, Object.keys(days[date.value] ?? {}), 'Pilih jam mulai', selectedStart);
+            updateEnd(selectedEnd);
+            showSlots();
             restore = false;
         } catch {
             if (requestId !== sequence) return;
@@ -95,6 +130,8 @@ if (form) {
     end.addEventListener('change', updateSubmit);
     retry.addEventListener('click', () => load());
     form.addEventListener('submit', (event) => { if (submit.disabled) event.preventDefault(); });
+    window.addEventListener('focus', () => { if (studio.value && !loading) load(); });
+    setInterval(() => { if (!document.hidden && studio.value && date.value && !loading) load(); }, 30000);
     if (oldDate) picker.jumpToDate(oldDate);
     load();
 }

@@ -15,7 +15,7 @@ class StudioFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->unique()->randomElement(['Studio A', 'Studio B', 'Studio C', 'Studio D']),
+            'name' => fake()->unique()->numerify('Studio ###'),
             'description' => fake()->sentence(),
             'capacity' => fake()->numberBetween(8, 30),
             'price_per_hour' => fake()->numberBetween(80000, 250000),

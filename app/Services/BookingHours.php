@@ -8,7 +8,7 @@ class BookingHours
 {
     public function current(): array
     {
-        $settings = DB::table('booking_settings')->where('id', 1)->first();
+        $settings = DB::table('booking_settings')->where('kind', 'operating_hours')->first();
 
         return [
             'opens_at' => $settings ? substr($settings->opens_at, 0, 5) : config('booking.opens_at'),

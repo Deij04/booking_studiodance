@@ -13,7 +13,7 @@
     @if($errors->any())<div class="notice error" role="alert">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
     <section class="history-detail-card"><h2>{{ $title ?: '-' }}</h2><dl>
         @if($type === 'studio')<div><dt>Kode Booking</dt><dd>{{ $record->booking_code }}</dd></div>@endif
-        <div><dt>Status {{ $type === 'studio' ? 'Penyewaan' : 'Reservasi Kelas' }}</dt><dd>{{ \App\Models\Reservation::STATUSES[$summary['rentalStatus']] ?? $summary['rentalStatus'] }}</dd></div>
+        <div><dt>Status {{ $type === 'studio' ? 'Penyewaan' : 'Reservasi Kelas' }}</dt><dd>{{ $type === 'class' ? $record->display_status : (\App\Models\Booking::STATUSES[$summary['rentalStatus']] ?? $summary['rentalStatus']) }}</dd></div>
         <div><dt>Nama</dt><dd>{{ auth()->user()->name }}</dd></div><div><dt>Studio</dt><dd>{{ $schedule?->studio?->name ?: '-' }}</dd></div>
         <div><dt>Tanggal</dt><dd>{{ $schedule?->date ? \Illuminate\Support\Carbon::parse($schedule->date)->format('d M Y') : '-' }}</dd></div><div><dt>Jam</dt><dd>{{ substr($schedule?->start_time ?? '-', 0, 5) }} &ndash; {{ substr($schedule?->end_time ?? '-', 0, 5) }}</dd></div>
         @if($type === 'studio' && $record->purpose)<div><dt>Session Type</dt><dd>{{ $record->purpose }}</dd></div>@endif
@@ -24,18 +24,32 @@
     <section class="history-detail-card"><h2>Pembayaran</h2><p>Status pembayaran: <strong>{{ $summary['label'] }}</strong></p>
         <div class="payment-totals"><span>Total<strong>Rp {{ number_format($summary['total'], 2, ',', '.') }}</strong></span><span>Pembayaran terverifikasi<strong>Rp {{ number_format($summary['paid'], 2, ',', '.') }}</strong></span><span>Sisa pembayaran<strong>Rp {{ number_format($summary['remaining'], 2, ',', '.') }}</strong></span></div>
         <div class="history-payment-table"><table><thead><tr><th>Tahap pembayaran</th><th>Nominal</th><th>Metode</th><th>Status pembayaran</th></tr></thead><tbody>
-            <tr><td>{{ $summary['dp'] ? 'DP (50%)' : 'Pembayaran penuh' }}</td><td>Rp {{ number_format($summary['firstAmount'], 2, ',', '.') }}</td><td>{{ \App\Models\Reservation::PAYMENT_METHODS[$summary['initial']?->payment_method] ?? '-' }}</td><td>{{ $summary['verified'] ? 'Terverifikasi' : 'Menunggu Verifikasi' }}</td></tr>
-            @if($summary['dp'])
-                <tr><td>Pelunasan</td><td>Rp {{ number_format($record->remaining_amount, 2, ',', '.') }}</td><td>{{ \App\Models\Reservation::PAYMENT_METHODS[$summary['settlement']?->payment_method] ?? '-' }}</td><td>{{ $summary['settlement'] ? \App\Models\ReservationSettlement::STATUSES[$summary['settlement']->status] : 'Belum diajukan' }}</td></tr>
+            <tr><td>{{ $summary['dp'] ? 'DP (50%)' : 'Pembayaran penuh' }}</td><td>Rp {{ number_format($summary['firstAmount'], 2, ',', '.') }}</td><td>{{ \App\Models\Booking::PAYMENT_METHODS[$summary['initial']?->payment_method] ?? '-' }}</td><td>{{ $summary['verified'] ? 'Terverifikasi' : (($type === 'class' && $record->payment?->verification_status === 'rejected') ? 'Belum Terverifikasi' : 'Menunggu Verifikasi') }}</td></tr>
+            @if($type === 'class')
+                @if(!$summary['settlement'] && ($summary['dp'] || $summary['remaining'] > 0))
+                    <tr><td>Pelunasan</td><td>Rp {{ number_format($summary['remaining'], 2, ',', '.') }}</td><td>-</td><td>Belum diajukan</td></tr>
+                @endif
+                @foreach($record->settlements()->orderBy('id')->get() as $classSettlement)
+                    <tr><td>Pelunasan</td><td>Rp {{ number_format($classSettlement->amount, 2, ',', '.') }}</td><td>{{ \App\Models\Booking::PAYMENT_METHODS[$classSettlement->payment_method] ?? '-' }}</td><td>{{ \App\Models\Payment::STATUSES[$classSettlement->status] }}</td></tr>
+                @endforeach
+            @else
+            @if($summary['dp'] || ($type === 'class' && ($summary['remaining'] > 0 || $summary['settlement'])))
+                <tr><td>Pelunasan</td><td>Rp {{ number_format($summary['settlement']?->amount ?? $summary['remaining'], 2, ',', '.') }}</td><td>{{ \App\Models\Booking::PAYMENT_METHODS[$summary['settlement']?->payment_method] ?? '-' }}</td><td>{{ $summary['settlement'] ? \App\Models\Payment::STATUSES[$summary['settlement']->status] : 'Belum diajukan' }}</td></tr>
+            @endif
             @endif
         </tbody></table></div>
-        <p>Status penyewaan atau kelas tetap terpisah dari pembayaran. DP terverifikasi belum berarti seluruh biaya lunas.</p>
     </section>
+    @if($type === 'class' && $record->payment?->verification_status === 'rejected')
+        <section class="history-detail-card"><h2>Pengajuan Reservasi Ditolak</h2><p class="notice error">{{ $record->payment->rejection_reason }}</p><p>Silakan mendaftar class lagi dan kirim pengajuan baru.</p><a class="gold" href="{{ route('user.classes.reserve', $schedule->danceClass) }}">Daftar Class Lagi</a></section>
+    @endif
+    @if($summary['settlement']?->status === 'rejected')
+        <p class="notice error" role="alert">Pembayaran Ditolak: bukti pelunasan belum diterima. Pembayaran sebelumnya tetap tercatat; silakan unggah ulang bukti pelunasan yang benar.</p>
+    @endif
     @if($summary['canSettle'])
-        <section class="history-detail-card"><h2>Bayar Pelunasan</h2><p>Nominal pelunasan: <strong>Rp {{ number_format($summary['remaining'], 2, ',', '.') }}</strong></p>
+        <section id="bayar-pelunasan" class="history-detail-card" style="scroll-margin-top:100px"><h2>Bayar Pelunasan</h2><p>Nominal pelunasan: <strong>Rp {{ number_format($summary['remaining'], 2, ',', '.') }}</strong></p>
             <form action="{{ route('user.history.settle', ['type' => $type, 'id' => $record->id]) }}" method="POST" enctype="multipart/form-data">
                 @csrf
-                <label for="settlement-method">Metode pembayaran</label><select id="settlement-method" name="payment_method" required>@foreach(\App\Models\Reservation::ONLINE_PAYMENT_METHODS as $value => $label)<option value="{{ $value }}" @selected(old('payment_method') === $value)>{{ $label }}</option>@endforeach</select>
+                <label for="settlement-method">Metode pembayaran</label><select id="settlement-method" name="payment_method" required>@foreach(\App\Models\Booking::ONLINE_PAYMENT_METHODS as $value => $label)<option value="{{ $value }}" @selected(old('payment_method') === $value)>{{ $label }}</option>@endforeach</select>
                 <div class="history-qris" data-settlement-qris><img src="{{ asset(config('booking.qris_image')) }}" alt="QRIS pembayaran">@if(config('booking.qris_image') === 'images/logoorange.png')<small style="color:#555">Logo sementara, QRIS belum tersedia.</small>@endif</div>
                 <div class="history-bank" data-settlement-bank hidden><p>Bank: {{ config('booking.bank_name') ?: '-' }}</p><p>Nomor rekening: {{ config('booking.bank_account_number') ?: '-' }}</p><p>Atas nama: {{ config('booking.bank_account_name') ?: '-' }}</p>@if(config('booking.bank_account_number') === '0000000000')<small>Data rekening dummy.</small>@endif</div>
                 <label for="settlement-proof">Bukti pelunasan</label><input id="settlement-proof" name="payment_proof" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" required><p>Maksimal 2 MB. Pelunasan akan diperiksa admin.</p><button type="submit">Ajukan Pelunasan</button>

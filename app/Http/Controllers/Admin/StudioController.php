@@ -20,7 +20,7 @@ class StudioController extends Controller
                 'tab' => 'operations',
                 'hours' => app(\App\Services\BookingHours::class)->current(),
                 'studios' => Studio::where('status', 'active')->orderBy('name')->get(),
-                'blocks' => \App\Models\StudioSchedule::with('studio')->where('status', 'blocked')
+                'blocks' => \App\Models\BookingSetting::with('studio')->blocked()
                     ->orderByDesc('date')->orderBy('start_time')->paginate(10)->withQueryString(),
             ]);
         }
@@ -89,7 +89,7 @@ class StudioController extends Controller
 
     public function destroy(Studio $studio): RedirectResponse
     {
-        if ($studio->studioSchedules()->exists() || $studio->classSchedules()->exists()) {
+        if ($studio->bookings()->exists() || $studio->bookingSettings()->exists() || $studio->classSchedules()->exists()) {
             return to_route('admin.studios.index')->with('error', 'Studio memiliki jadwal studio atau kelas. Nonaktifkan melalui Edit agar jadwal dan riwayat booking tetap tersimpan.');
         }
 

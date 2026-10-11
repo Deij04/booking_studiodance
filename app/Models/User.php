@@ -33,9 +33,9 @@ class User extends Authenticatable
         ];
     }
 
-    public function reservations()
+    public function bookings()
     {
-        return $this->hasMany(Reservation::class);
+        return $this->hasMany(Booking::class);
     }
 
     public function classRegistrations()

@@ -18,8 +18,8 @@ class AccountController extends Controller
         $user = $request->user();
 
         return view('user.account.history', [
-            'bookings' => $user->reservations()->with('studioSchedule.studio')->latest('id')->paginate(10, ['*'], 'bookings_page')->withQueryString(),
-            'registrations' => $user->classRegistrations()->with(['classSchedule.danceClass', 'payment'])->latest('id')->paginate(10, ['*'], 'classes_page')->withQueryString(),
+            'bookings' => $user->bookings()->with(['studio', 'payment', 'settlement'])->latest('id')->paginate(10, ['*'], 'bookings_page')->withQueryString(),
+            'registrations' => $user->classRegistrations()->with(['classSchedule.danceClass', 'payment', 'settlement'])->latest('id')->paginate(10, ['*'], 'classes_page')->withQueryString(),
             'memberships' => $user->memberships()->with('membershipPlan')->latest('id')->paginate(10, ['*'], 'memberships_page')->withQueryString(),
         ]);
     }

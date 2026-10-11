@@ -3,9 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\ClassSchedule;
-use App\Models\Reservation;
+use App\Models\Booking;
 use App\Models\Studio;
-use App\Models\StudioSchedule;
+use App\Models\BookingSetting;
 use App\Models\User;
 use App\Services\BookingAvailability;
 use App\Services\BookingHours;
@@ -48,8 +48,7 @@ class StudioOperationsTest extends TestCase
         $this->put(route('admin.studio-operations.hours'), ['opens_at' => '08:00', 'closes_at' => '18:00'])->assertSessionHasErrors('opens_at');
         $this->put(route('admin.studio-operations.hours'), ['opens_at' => '08:00', 'closes_at' => '19:00'])->assertSessionHasNoErrors();
         $schedule->update(['status' => 'inactive']);
-        $slot = StudioSchedule::factory()->create(['studio_id' => $schedule->studio_id, 'date' => $schedule->date, 'start_time' => '08:00:00', 'end_time' => '09:00:00', 'status' => 'available']);
-        Reservation::factory()->create(['studio_schedule_id' => $slot->id, 'status' => 'pending']);
+        Booking::factory()->create(['studio_id' => $schedule->studio_id, 'date' => $schedule->date, 'start_time' => '08:00:00', 'end_time' => '09:00:00', 'status' => 'pending']);
         $this->put(route('admin.studio-operations.hours'), ['opens_at' => '09:00', 'closes_at' => '19:00'])->assertSessionHasErrors('opens_at');
         $this->put(route('admin.studio-operations.hours'), ['opens_at' => '20:00', 'closes_at' => '08:00'])->assertSessionHasErrors('closes_at');
         $this->put(route('admin.studio-operations.hours'), ['opens_at' => '08:00', 'closes_at' => '08:30'])->assertSessionHasErrors('closes_at');
@@ -63,7 +62,7 @@ class StudioOperationsTest extends TestCase
         $date = today()->addDay()->toDateString();
         $data = ['studio_id' => $studio->id, 'date' => $date, 'start_time' => '10:00', 'end_time' => '12:00', 'block_reason' => 'Perbaikan lantai'];
         $this->post(route('admin.studio-operations.block'), $data)->assertSessionHasNoErrors();
-        $block = StudioSchedule::firstOrFail();
+        $block = BookingSetting::blocked()->firstOrFail();
         $this->get(route('admin.studios.index', ['tab' => 'operations']))->assertOk()->assertSee('Perbaikan lantai')->assertSee('Buka Blokir');
         $slots = fn ($target) => app(BookingAvailability::class)->month($target, substr($date, 0, 7))[$date];
         $this->assertArrayNotHasKey('10:00', $slots($studio));
@@ -83,17 +82,15 @@ class StudioOperationsTest extends TestCase
         $data = ['studio_id' => $schedule->studio_id, 'date' => $schedule->date, 'start_time' => '18:30', 'end_time' => '20:00', 'block_reason' => 'Maintenance'];
         $this->post(route('admin.studio-operations.block'), $data)->assertSessionHasErrors('start_time');
         $schedule->update(['status' => 'inactive']);
-        $slot = StudioSchedule::factory()->create(['studio_id' => $schedule->studio_id, 'date' => $schedule->date, 'start_time' => '18:00:00', 'end_time' => '19:00:00', 'status' => 'booked']);
-        Reservation::factory()->create(['studio_schedule_id' => $slot->id]);
+        $slot = Booking::factory()->create(['studio_id' => $schedule->studio_id, 'date' => $schedule->date, 'start_time' => '18:00:00', 'end_time' => '19:00:00']);
         $this->post(route('admin.studio-operations.block'), $data)->assertSessionHasErrors('start_time');
-        $this->patch(route('admin.studio-operations.unblock', $slot))->assertSessionHasErrors('block');
-        $this->assertSame('booked', $slot->fresh()->status);
+        $this->assertSame('pending', $slot->fresh()->status);
         $this->post(route('admin.studio-operations.block'), array_replace($data, ['date' => today()->subDay()->toDateString()]))->assertSessionHasErrors('date');
     }
 
     public function test_management_is_restricted_to_staff(): void
     {
-        $slot = StudioSchedule::factory()->create(['status' => 'blocked']);
+        $slot = BookingSetting::factory()->create(['status' => 'blocked']);
         $requests = [['get', 'index'], ['put', 'hours'], ['post', 'block'], ['patch', 'unblock']];
         foreach ($requests as [$method, $action]) {
             $this->{$method}(route('admin.studio-operations.'.$action, $action === 'unblock' ? $slot : []))->assertRedirect(route('login'));
@@ -115,5 +112,33 @@ class StudioOperationsTest extends TestCase
         $this->post(route('admin.bookings.store'), $data + ['user_id' => User::factory()->create()->id, 'payment_status' => 'unpaid'])->assertSessionHasErrors(['start_time', 'end_time']);
         $this->get(route('admin.studios.index', ['tab' => 'operations']))->assertOk()
             ->assertSee('value="08:30"', false)->assertDontSee('value="08:15"', false);
+    }
+
+    public function test_booking_setting_blocks_studio_rentals_without_changing_classes(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+        $studio = Studio::factory()->create(['status' => 'active']);
+        $class = ClassSchedule::factory()->create(['studio_id' => $studio->id, 'date' => today()->addDays(2)->toDateString()]);
+        $originalClass = $class->getAttributes();
+        $date = today()->addDay()->toDateString();
+        $this->get(route('admin.studios.index', ['tab' => 'operations']))->assertOk()->assertSee('Booking Setting')->assertSee('Blokir Jam Penyewaan Studio');
+        $this->post(route('admin.studio-operations.block'), ['studio_id' => $studio->id, 'date' => $date, 'start_time' => '10:00', 'end_time' => '12:00', 'block_reason' => 'Acara internal'])->assertSessionHasNoErrors();
+        $booking = ['studio_id' => $studio->id, 'user_id' => User::factory()->create()->id, 'date' => $date, 'start_time' => '10:00', 'end_time' => '11:00', 'purpose' => 'Group Training', 'payment_method' => 'cash', 'payment_type' => 'full'];
+        $this->post(route('admin.bookings.store'), $booking)->assertSessionHasErrors('start_time');
+        $this->assertDatabaseCount('bookings', 0);
+        $block = BookingSetting::where('status', 'blocked')->sole();
+        $this->patch(route('admin.studio-operations.unblock', $block))->assertSessionHasNoErrors();
+        $this->post(route('admin.bookings.store'), $booking)->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('bookings', 1);
+        $this->assertEquals($originalClass, $class->fresh()->getAttributes());
+    }
+    public function test_manual_block_must_be_within_operating_hours(): void
+    {
+        config(['booking.opens_at' => '08:00', 'booking.closes_at' => '22:00']);
+        $this->actingAs(User::factory()->admin()->create());
+        $data = ['studio_id' => Studio::factory()->create()->id, 'date' => today()->addDay()->toDateString(), 'start_time' => '07:00', 'end_time' => '09:00', 'block_reason' => 'Maintenance'];
+        $this->post(route('admin.studio-operations.block'), $data)->assertSessionHasErrors('start_time');
+        $this->post(route('admin.studio-operations.block'), array_replace($data, ['start_time' => '21:00', 'end_time' => '23:00']))->assertSessionHasErrors('start_time');
+        $this->assertDatabaseCount('booking_settings', 0);
     }
 }

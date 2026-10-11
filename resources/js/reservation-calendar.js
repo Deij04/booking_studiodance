@@ -30,6 +30,7 @@ if (form) {
     let month = new Date(`${base.slice(0, 7)}-01T12:00:00`);
     let days = {};
     let occupied = [];
+    let operatingHours = null;
     let loading = false;
     let sequence = 0;
     let restore = true;
@@ -70,9 +71,20 @@ if (form) {
         find('#selected-date-title').textContent = date.value ? new Date(`${date.value}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' }) : 'Choose a date';
         const starts = availableStarts();
         if (!starts.includes(start.value)) start.value = '';
-        starts.forEach(value => {
+        const displayedStarts = [];
+        if (!loading && date.value && studio.value && operatingHours) {
+            for (let minute = minutes(operatingHours.opens_at); minute + minimum <= minutes(operatingHours.closes_at); minute += step) {
+                displayedStarts.push(`${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`);
+            }
+        }
+        displayedStarts.forEach(value => {
             const button = text('button', value, start.value === value ? 'selected' : '');
-            button.type = 'button'; button.setAttribute('aria-pressed', String(start.value === value));
+            const available = starts.includes(value);
+            button.type = 'button';
+            button.disabled = !available;
+            button.classList.toggle('unavailable', !available);
+            button.title = available ? 'Pilih jam mulai' : 'Jam terisi atau tidak tersedia untuk durasi yang dipilih';
+            button.setAttribute('aria-pressed', String(start.value === value));
             button.addEventListener('click', () => { start.value = value; renderTimes(); });
             times.append(button);
         });
@@ -93,7 +105,7 @@ if (form) {
             const button = document.createElement('button');
             button.type = 'button';
             button.className = `calendar-day${outside ? ' outside' : ''}${value < today ? ' past' : ''}${!outside && slots.length ? ' available' : ''}${value === date.value ? ' selected' : ''}`;
-            button.disabled = outside || loading || !slots.length;
+            button.disabled = outside || loading || value < today || !Object.hasOwn(days, value);
             button.setAttribute('aria-pressed', String(value === date.value));
             button.setAttribute('aria-label', `${day.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, ${slots.length ? 'available' : 'unavailable'}`);
             button.append(text('span', day.getDate(), 'day-number'));
@@ -115,14 +127,14 @@ if (form) {
             if (!response.ok) throw new Error('Availability failed');
             const data = await response.json();
             if (id !== sequence) return;
-            days = data.days; occupied = data.occupied ?? [];
+            days = data.days; occupied = data.occupied ?? []; operatingHours = data.hours;
             if (restore && initial.date.slice(0, 7) === key(month).slice(0, 7)) {
                 date.value = initial.date; start.value = initial.start;
                 const oldDuration = minutes(initial.end) - minutes(initial.start);
                 if (Number.isFinite(oldDuration) && oldDuration >= minimum) hours.value = oldDuration / 60;
             }
             restore = false;
-            if (!Object.keys(days[date.value] ?? {}).length) { date.value = ''; start.value = ''; }
+            if (!Object.hasOwn(days, date.value) || date.value < today) { date.value = ''; start.value = ''; }
             status.textContent = 'Select a date to see available times. Booked times cannot be selected.';
         } catch {
             if (id !== sequence) return;

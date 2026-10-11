@@ -18,7 +18,7 @@
             <div class="sm:col-span-2"><label for="description">Deskripsi / manfaat paket</label><textarea id="description" name="description" rows="4" maxlength="10000" class="{{ $inputClass }}">{{ old('description', $plan->description) }}</textarea></div>
         </div>
         <p class="mt-4 text-xs leading-5 text-white/50">Perubahan harga dan durasi berlaku untuk pendaftaran baru. Nonaktifkan paket agar tidak dapat dipilih saat menambah membership.</p>
-        <div class="mt-7 flex justify-end gap-4 border-t border-white/10 pt-6"><a href="{{ route('admin.memberships.index', ['tab' => 'plans']) }}" class="px-3 py-3 text-sm text-white/60">Batal</a><button class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black">Simpan Paket</button></div>
+        <div class="mt-7 flex justify-end gap-4 border-t border-white/10 pt-6"><a href="{{ route('admin.memberships.index', ['tab' => 'plans']) }}" class="px-3 py-3 text-sm text-white/60">Batal</a><button data-save-confirm class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black">Simpan Paket</button></div>
     </form>
 </div>
 @endsection
