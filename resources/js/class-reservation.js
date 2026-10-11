@@ -26,13 +26,12 @@ if (form) {
         find('[data-class-next="details"]').disabled = !selected;
         for (const field of ['date', 'time', 'studio']) form.querySelectorAll(`[data-class-${field}]`).forEach(element => { element.textContent = selected?.dataset[field] ?? ''; });
         find('[data-class-method-label]').textContent = method.selectedOptions[0].textContent;
-        find('[data-class-type-label]').textContent = type.selectedOptions[0].textContent;
+        find('[data-class-type-label]').textContent = 'Lunas (100%)';
         const total = Number(form.dataset.price);
-        const due = Math.round(total * (type.value === 'dp' ? 0.5 : 1) * 100) / 100;
+        const due = total;
         const currency = value => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 2 }).format(value);
-        find('[data-class-due-label]').textContent = type.value === 'dp' ? 'Bayar DP (50%)' : 'Bayar Lunas';
+        find('[data-class-due-label]').textContent = 'Bayar Lunas';
         find('[data-class-due]').textContent = currency(due);
-        find('[data-class-remaining]').textContent = currency(Math.round((total - due) * 100) / 100);
         find('[data-class-qris]').hidden = method.value !== 'qris';
         find('[data-class-bank]').hidden = method.value !== 'bank_transfer';
     }

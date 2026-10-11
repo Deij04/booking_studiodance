@@ -14,12 +14,11 @@ return new class extends Migration
             $table->foreignId('class_schedule_id')->constrained('class_schedules')->cascadeOnDelete();
             $table->date('registration_date');
             $table->decimal('price', 12, 2);
-            $table->enum('payment_status', ['unpaid', 'paid'])->default('unpaid');
             $table->enum('registration_status', ['pending', 'confirmed', 'cancelled', 'completed'])->default('pending');
             $table->timestamps();
 
-            $table->unique(['user_id', 'class_schedule_id']);
-            $table->index(['class_schedule_id', 'registration_status', 'payment_status'], 'cr_schedule_status_payment_idx');
+            $table->index(['user_id', 'class_schedule_id'], 'class_registrations_user_schedule_index');
+            $table->index(['class_schedule_id', 'registration_status'], 'cr_schedule_status_idx');
         });
     }
 

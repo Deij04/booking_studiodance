@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Reservation;
+use App\Models\Booking;
 use App\Models\Studio;
 use App\Models\StudioSchedule;
 use App\Models\User;
@@ -18,13 +18,13 @@ class DashboardBookingTest extends TestCase
         $this->withoutVite();
         $this->travelTo(now()->setTime(12, 0));
         $studio = Studio::factory()->create();
-        $pending = Reservation::factory()->recycle($studio)->create();
-        Reservation::factory()->recycle($studio)->create(['status' => 'cancelled']);
-        Reservation::factory()->recycle($studio)->create(['status' => 'completed']);
-        $later = Reservation::factory()->recycle($studio)->create(['status' => 'confirmed', 'studio_schedule_id' => StudioSchedule::factory()->recycle($studio)->create(['date' => today()->addDays(2)->toDateString()])->id]);
-        $near = Reservation::factory()->recycle($studio)->create(['status' => 'confirmed', 'studio_schedule_id' => StudioSchedule::factory()->recycle($studio)->create(['date' => today()->addDay()->toDateString()])->id]);
-        Reservation::factory()->recycle($studio)->create(['status' => 'confirmed', 'studio_schedule_id' => StudioSchedule::factory()->recycle($studio)->create(['date' => today()->toDateString(), 'start_time' => '08:00:00', 'end_time' => '10:00:00'])->id]);
-        $ongoing = Reservation::factory()->recycle($studio)->create(['status' => 'confirmed', 'studio_schedule_id' => StudioSchedule::factory()->recycle($studio)->create(['date' => today()->toDateString(), 'start_time' => '11:00:00', 'end_time' => '13:00:00'])->id]);
+        $pending = Booking::factory()->recycle($studio)->create();
+        Booking::factory()->recycle($studio)->create(['status' => 'cancelled']);
+        Booking::factory()->recycle($studio)->create(['status' => 'completed']);
+        $later = Booking::factory()->recycle($studio)->create(['status' => 'confirmed', 'studio_schedule_id' => StudioSchedule::factory()->recycle($studio)->create(['date' => today()->addDays(2)->toDateString()])->id]);
+        $near = Booking::factory()->recycle($studio)->create(['status' => 'confirmed', 'studio_schedule_id' => StudioSchedule::factory()->recycle($studio)->create(['date' => today()->addDay()->toDateString()])->id]);
+        Booking::factory()->recycle($studio)->create(['status' => 'confirmed', 'studio_schedule_id' => StudioSchedule::factory()->recycle($studio)->create(['date' => today()->toDateString(), 'start_time' => '08:00:00', 'end_time' => '10:00:00'])->id]);
+        $ongoing = Booking::factory()->recycle($studio)->create(['status' => 'confirmed', 'studio_schedule_id' => StudioSchedule::factory()->recycle($studio)->create(['date' => today()->toDateString(), 'start_time' => '11:00:00', 'end_time' => '13:00:00'])->id]);
         foreach (['admin', 'super_admin'] as $role) {
             $this->actingAs(User::factory()->create(['role' => $role]));
             $this->get(route('admin.dashboard'))->assertOk()

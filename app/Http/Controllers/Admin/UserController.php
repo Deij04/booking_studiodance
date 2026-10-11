@@ -82,7 +82,7 @@ class UserController extends Controller
         Gate::authorize('delete', $user);
 
         // Riwayat transaksi tidak boleh ikut terhapus oleh cascade pada database.
-        if ($user->reservations()->exists() || $user->classRegistrations()->exists() || $user->memberships()->exists()) {
+        if ($user->bookings()->exists() || $user->classRegistrations()->exists() || $user->memberships()->exists()) {
             return to_route('admin.users.index')->with('error', 'User memiliki riwayat booking, kelas, atau membership. Nonaktifkan akun melalui Edit agar riwayat tetap tersimpan.');
         }
 

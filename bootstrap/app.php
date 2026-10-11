@@ -14,7 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->web(append: [UsePublicEnglish::class, EnsureAccountIsActive::class]);
+        $middleware->web(append: [UsePublicEnglish::class, EnsureAccountIsActive::class, \App\Http\Middleware\CompleteElapsedBookings::class]);
         $middleware->redirectUsersTo(fn (Request $request) => route(
             $request->user()->can('access-admin') ? 'admin.dashboard' : 'landing',
         ));

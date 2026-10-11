@@ -7,17 +7,16 @@ use Carbon\Carbon;
 
 class BookingAvailability
 {
-    public function month(Studio $studio, string $month): array
+    public function month(Studio $studio, string $month, ?int $excludeScheduleId = null): array
     {
         $first = Carbon::createFromFormat('!Y-m', $month)->startOfMonth();
         $last = $first->copy()->endOfMonth();
-        $occupied = $studio->studioSchedules()->whereBetween('date', [$first->toDateString(), $last->toDateString()])
-            ->where(fn ($query) => $query->whereIn('status', ['booked', 'blocked'])
-                ->orWhereHas('reservation', fn ($booking) => $booking->where('status', '!=', 'cancelled')))
-            ->get(['date', 'start_time', 'end_time']);
+        $occupied = $studio->bookings()->when($excludeScheduleId, fn ($q) => $q->where('id', '!=', $excludeScheduleId))
+            ->whereBetween('date', [$first->toDateString(), $last->toDateString()])->where('status', '!=', 'cancelled')->get(['date', 'start_time', 'end_time']);
+        $blocks = $studio->bookingSettings()->blocked()->whereBetween('date', [$first->toDateString(), $last->toDateString()])->get(['date', 'start_time', 'end_time']);
         $classes = $studio->classSchedules()->where('status', 'active')
             ->whereBetween('date', [$first->toDateString(), $last->toDateString()])->get(['date', 'start_time', 'end_time']);
-        $busy = $occupied->toBase()->merge($classes)->groupBy('date');
+        $busy = $occupied->toBase()->merge($blocks)->merge($classes)->groupBy('date');
         $days = [];
         $now = now();
         $hours = app(BookingHours::class)->current();

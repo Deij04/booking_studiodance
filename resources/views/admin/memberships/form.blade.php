@@ -24,7 +24,7 @@
             <p class="mt-4 text-xs leading-5 text-white/50">Tanggal berakhir dihitung otomatis dari durasi paket, termasuk hari pertama. Membership baru berstatus Menunggu dan Belum Lunas.</p>
             @if($users->isEmpty() || $plans->isEmpty())<p role="status" class="mt-4 text-sm text-[#f2c83f]">Pastikan customer aktif dan paket aktif sudah tersedia sebelum menambahkan membership.</p>@endif
         @endif
-        <div class="mt-7 flex justify-end gap-4 border-t border-white/10 pt-6"><a href="{{ route('admin.memberships.index') }}" class="px-3 py-3 text-sm text-white/60">Batal</a><button class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black">Simpan Membership</button></div>
+        <div class="mt-7 flex justify-end gap-4 border-t border-white/10 pt-6"><a href="{{ route('admin.memberships.index') }}" class="px-3 py-3 text-sm text-white/60">Batal</a><button data-save-confirm class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black">Simpan Membership</button></div>
     </form>
     @if($membership->exists && $membership->status === 'pending')
         <section class="mt-6 rounded-2xl border border-white/10 bg-[#171717] p-5">

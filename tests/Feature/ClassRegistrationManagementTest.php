@@ -18,7 +18,7 @@ class ClassRegistrationManagementTest extends TestCase
         $this->withoutVite();
     }
 
-    public function test_admin_can_render_create_search_and_update_reservations(): void
+    public function test_admin_can_render_create_search_and_update_bookings(): void
     {
         $this->actingAs(User::factory()->admin()->create());
         $schedule = ClassSchedule::factory()->create();

@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\User;
 
-use App\Http\Controllers\Admin\BookingController;
+use App\Http\Controllers\Admin\BookingController as AdminBookingController;
 use App\Models\Studio;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
-class ReservationController extends BookingController
+class BookingController extends AdminBookingController
 {
     public function create(): View|RedirectResponse
     {
@@ -20,7 +20,7 @@ class ReservationController extends BookingController
         }
         $studio = Studio::where('status', 'active')->findOrFail($studioId);
 
-        return view('user.reservations.create', [
+        return view('user.bookings.create', [
             'studio' => $studio,
             'hours' => app(\App\Services\BookingHours::class)->current(),
         ]);
@@ -39,22 +39,21 @@ class ReservationController extends BookingController
         $data = $request->validate(['month' => ['required', 'date_format:Y-m']]);
         $first = \Carbon\Carbon::createFromFormat('!Y-m', $data['month']);
         $last = $first->copy()->endOfMonth();
-        $occupied = $studio->studioSchedules()
-            ->whereBetween('date', [$first->toDateString(), $last->toDateString()])
-            ->where(fn ($query) => $query->whereIn('status', ['booked', 'blocked'])
-                ->orWhereHas('reservation', fn ($booking) => $booking->where('status', '!=', 'cancelled')))
-            ->get(['date', 'start_time', 'end_time', 'status'])
-            ->map(fn ($slot) => ['date' => $slot->date, 'label' => $slot->status === 'blocked' ? 'Unavailable' : 'Booked',
-                'start_time' => substr($slot->start_time, 0, 5), 'end_time' => substr($slot->end_time, 0, 5)]);
+        $occupied = $studio->bookings()->where('status', '!=', 'cancelled')
+            ->whereBetween('date', [$first->toDateString(), $last->toDateString()])->get(['date', 'start_time', 'end_time'])
+            ->map(fn ($slot) => ['date' => $slot->date, 'label' => 'Booked', 'start_time' => substr($slot->start_time, 0, 5), 'end_time' => substr($slot->end_time, 0, 5)]);
+        $blocks = $studio->bookingSettings()->blocked()->whereBetween('date', [$first->toDateString(), $last->toDateString()])->get(['date', 'start_time', 'end_time'])
+            ->map(fn ($slot) => ['date' => $slot->date, 'label' => 'Unavailable', 'start_time' => substr($slot->start_time, 0, 5), 'end_time' => substr($slot->end_time, 0, 5)]);
         $classes = $studio->classSchedules()->where('status', 'active')
             ->whereBetween('date', [$first->toDateString(), $last->toDateString()])
             ->get(['date', 'start_time', 'end_time'])
-            ->map(fn ($slot) => ['date' => $slot->date, 'label' => 'Booked (Class)',
+            ->map(fn ($slot) => ['date' => $slot->date, 'label' => 'Booked',
                 'start_time' => substr($slot->start_time, 0, 5), 'end_time' => substr($slot->end_time, 0, 5)]);
 
         return response()->json([
             'days' => app(\App\Services\BookingAvailability::class)->month($studio, $data['month']),
-            'occupied' => $occupied->concat($classes)->values(),
+            'occupied' => $occupied->concat($blocks)->concat($classes)->values(),
+            'hours' => app(\App\Services\BookingHours::class)->current(),
         ])->header('Cache-Control', 'private, no-store');
     }
 }

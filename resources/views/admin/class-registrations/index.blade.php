@@ -2,18 +2,15 @@
 @section('title', 'Reservasi Class')
 @section('content')
 <div class="p-4 sm:p-7 lg:p-10">
-    @php
-        $activeTab = request('tab') === 'classes' ? 'classes' : 'reservations';
-    @endphp
     <div class="flex flex-wrap items-center justify-between gap-4">
         <div><h2 class="text-2xl font-bold">Reservasi Class</h2><p class="mt-2 text-sm text-white/50">Kelola peserta, pembayaran, dan status reservasi dance class.</p></div>
         <a href="{{ route($activeTab === 'classes' ? 'admin.class-schedules.create' : 'admin.class-registrations.create') }}" class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black">{{ $activeTab === 'classes' ? 'Tambah Jadwal Class' : 'Tambah Reservasi' }}</a>
     </div>
     @if(session('success'))<div role="status" class="mt-6 rounded-xl bg-green-400/10 p-4 text-sm text-green-300">{{ session('success') }}</div>@endif
     @if($errors->any())<div role="alert" class="mt-6 text-red-300">{{ $errors->first() }}</div>@endif
-    <nav class="mt-6 flex gap-2 border-b border-white/10 pb-3" aria-label="Tampilan reservasi class">
-        @foreach(['reservations' => 'Daftar Reservasi', 'classes' => 'Jadwal Class'] as $tab => $label)
-            <a href="{{ route('admin.class-registrations.index', array_merge(request()->except('tab'), ['tab' => $tab])) }}" @if($activeTab === $tab) aria-current="page" @endif class="rounded-xl px-4 py-3 text-sm font-semibold {{ $activeTab === $tab ? 'bg-[#f2c83f] text-black' : 'text-white/60 hover:bg-white/5 hover:text-white' }}">{{ $label }}</a>
+    <nav class="mt-6 flex flex-wrap gap-2 border-b border-white/10 pb-3" aria-label="Tampilan reservasi class">
+        @foreach($tabs as $tab => $label)
+            <a href="{{ route('admin.class-registrations.index', ['tab' => $tab]) }}" @if($activeTab === $tab) aria-current="page" @endif class="rounded-xl px-4 py-3 text-sm font-semibold {{ $activeTab === $tab ? 'bg-[#f2c83f] text-black' : 'text-white/60 hover:bg-white/5 hover:text-white' }}">{{ $label }} <span class="ml-2 text-xs">{{ $tabCounts[$tab] }}</span></a>
         @endforeach
     </nav>
     @if($activeTab === 'classes')
@@ -44,7 +41,7 @@
                                 <form method="POST" action="{{ route('admin.class-schedules.deactivate', $schedule) }}">
                                     @csrf
                                     @method('PATCH')
-                                    <button class="rounded-xl border border-red-400/30 px-3 py-2 text-sm text-red-300">Nonaktifkan</button>
+                                    <button type="submit" title="Nonaktifkan jadwal class agar tidak menerima reservasi dan jam studio tersedia kembali. Riwayat peserta tetap tersimpan. Tidak dapat dinonaktifkan jika masih ada reservasi menunggu atau terkonfirmasi." class="rounded-xl border border-red-400/30 px-3 py-2 text-sm text-red-300 transition-colors hover:border-red-400/60 hover:bg-red-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-300">Nonaktifkan</button>
                                 </form>
                             @endif
                         </div>
@@ -54,8 +51,13 @@
                             <ul class="mt-3 max-h-64 space-y-3 overflow-y-auto" aria-label="Peserta {{ $schedule->danceClass->name }}">
                                 @forelse($participants as $participant)
                                     <li class="flex items-center justify-between gap-3 rounded-xl bg-white/5 p-3">
-                                        <div class="min-w-0"><p class="break-words text-sm font-medium">{{ $participant->user->name }}</p><p class="mt-1 text-xs text-white/50">{{ \App\Models\ClassRegistration::STATUSES[$participant->registration_status] }} &middot; {{ $participant->payment_status === 'paid' ? 'Lunas' : 'Belum Lunas' }}</p></div>
+                                        <div class="min-w-0 flex-1"><p class="break-words text-sm font-medium"><a class="hover:underline" href="{{ route('admin.class-registrations.show', $participant) }}">{{ $participant->user->name }}</a></p><p class="mt-1 text-xs text-white/50">{{ $participant->display_status }} &middot; {{ app(\App\Services\PaymentSummary::class)->for($participant)['label'] }}</p></div>
+                                        <div class="ml-auto flex shrink-0 items-center gap-3">
                                         <a href="{{ route('admin.class-registrations.show', $participant) }}" class="shrink-0 text-xs text-[#f2c83f] hover:underline" aria-label="Detail reservasi {{ $participant->user->name }}">Detail</a>
+                                            @if($participant->payment_status === 'unpaid' && $participant->registration_status !== 'cancelled')
+                                                <a href="{{ route('admin.class-registrations.verify', $participant) }}" class="rounded-lg bg-[#f2c83f] px-3 py-2 text-xs font-semibold text-black">Verifikasi</a>
+                                            @endif
+                                        </div>
                                     </li>
                                 @empty
                                     <li class="rounded-xl border border-dashed border-white/10 p-4 text-sm text-white/40">Belum ada peserta yang ikut.</li>
@@ -74,12 +76,15 @@
         <div class="mt-5">{{ $schedules->links() }}</div>
     </section>
     @else
-    <h3 class="mt-10 text-lg font-semibold">Daftar Reservasi</h3>
+    <h3 class="mt-10 text-lg font-semibold">{{ $tabs[$activeTab] }}</h3>
     <form method="GET" class="my-6 flex flex-wrap items-end gap-3">
-        <input type="hidden" name="tab" value="reservations">
+        <input type="hidden" name="tab" value="{{ $activeTab }}">
         <div class="flex-1"><label for="search" class="text-sm text-white/60">Cari peserta atau class</label><input id="search" name="search" value="{{ $search }}" placeholder="Nama, email, atau nama class" class="mt-2 w-full rounded-xl border border-white/15 bg-[#171717] px-4 py-3 text-sm"></div>
-        <div><label for="status" class="text-sm text-white/60">Status reservasi</label><select id="status" name="status" class="mt-2 block rounded-xl border border-white/15 bg-[#171717] px-4 py-3 text-sm"><option value="">Semua status</option>@foreach(\App\Models\ClassRegistration::STATUSES as $value => $label)<option value="{{ $value }}" @selected($status === $value)>{{ $label }}</option>@endforeach</select></div>
-        <button class="rounded-xl bg-white/10 px-5 py-3 text-sm">Cari</button><a href="{{ route('admin.class-registrations.index') }}" class="px-3 py-3 text-sm text-white/60">Reset</a>
+        @if($activeTab === 'history')
+            <div><label for="status" class="text-sm text-white/60">Status reservasi</label><select id="status" name="status" class="mt-2 block rounded-xl border border-white/15 bg-[#171717] px-4 py-3 text-sm"><option value="">Semua riwayat</option><option value="completed" @selected($status === 'completed')>Selesai</option><option value="cancelled" @selected($status === 'cancelled')>Ditolak / Dibatalkan</option></select></div>
+        @endif
+        <div><label for="date" class="text-sm text-white/60">Tanggal class</label><input type="date" id="date" name="date" value="{{ $date }}" class="mt-2 block rounded-xl border border-white/15 bg-[#171717] px-4 py-3 text-sm [color-scheme:dark]"></div>
+        <button class="rounded-xl bg-white/10 px-5 py-3 text-sm">Cari</button><a href="{{ route('admin.class-registrations.index', ['tab' => $activeTab]) }}" class="px-3 py-3 text-sm text-white/60">Reset</a>
     </form>
     <div class="overflow-x-auto rounded-2xl border border-white/10 bg-[#171717]">
         <table class="w-full whitespace-nowrap text-left text-sm">
@@ -90,9 +95,21 @@
                         <td class="p-4"><p class="font-semibold">{{ $registration->user->name }}</p><p class="mt-1 text-xs text-white/50">{{ $registration->user->email }}</p></td>
                         <td class="p-4"><p>{{ $registration->classSchedule->danceClass->name }}</p><p class="mt-1 text-xs text-white/50">{{ \Illuminate\Support\Carbon::parse($registration->classSchedule->date)->format('d/m/Y') }} · {{ substr($registration->classSchedule->start_time, 0, 5) }}–{{ substr($registration->classSchedule->end_time, 0, 5) }}</p><p class="mt-1 text-xs text-white/50">{{ $registration->classSchedule->studio->name }}</p></td>
                         <td class="p-4">Rp {{ number_format($registration->price, 2, ',', '.') }}</td>
-                        <td class="p-4 {{ $registration->payment_status === 'paid' ? 'text-green-300' : 'text-[#f2c83f]' }}">{{ \App\Models\Reservation::PAYMENT_STATUSES[$registration->payment_status] }}@if($registration->payment)<p class="mt-1 text-xs text-white/50">{{ \App\Models\Reservation::PAYMENT_METHODS[$registration->payment->payment_method] ?? '-' }} &middot; {{ \App\Models\Reservation::PAYMENT_TYPES[$registration->payment->payment_type] ?? '-' }}</p>@if($registration->payment->verified_by_name)<p class="mt-1 text-xs text-white/50">Oleh {{ $registration->payment->verified_by_name }}</p>@endif @endif</td>
-                        <td class="p-4">{{ \App\Models\ClassRegistration::STATUSES[$registration->registration_status] }}</td>
-                        <td class="p-4"><a href="{{ route('admin.class-registrations.show', $registration) }}" class="text-[#f2c83f] hover:underline">Detail</a> <a href="{{ route('admin.class-registrations.edit', $registration) }}" class="ml-3 text-white/60 hover:underline">Edit</a></td>
+                        <td class="p-4">
+                            @php
+                                $paymentSummary = app(\App\Services\PaymentSummary::class)->for($registration);
+                            @endphp
+                            <p class="text-[#f2c83f]">{{ $paymentSummary['label'] }}</p>
+                            @if($paymentSummary['remaining'] > 0)<p class="mt-1 text-xs text-white/50">Sisa Rp {{ number_format($paymentSummary['remaining'], 0, ',', '.') }}</p>@endif
+                            @if($paymentSummary['settlement']?->status === 'pending')<a href="{{ route('admin.class-registrations.show', $registration) }}#pelunasan" class="mt-2 inline-block text-xs text-[#f2c83f]">Verifikasi Pelunasan</a>@endif
+                        </td>
+                        <td class="p-4">{{ $registration->display_status }}</td>
+                        <td class="p-4"><div class="flex items-center gap-3"><a href="{{ route('admin.class-registrations.show', $registration) }}" class="text-[#f2c83f] hover:underline">Detail</a>
+                            @if($paymentSummary['canSettle'])<a href="{{ route('admin.class-registrations.show', $registration) }}#pelunasan" class="text-[#f2c83f]">Pelunasan</a>@endif
+                            @if(in_array($registration->registration_status, ['pending', 'confirmed']) && \Carbon\Carbon::parse($registration->classSchedule->date.' '.$registration->classSchedule->end_time)->gt(now()))
+                                <a href="{{ route('admin.class-registrations.edit', $registration) }}" class="text-white/60 hover:underline">Edit</a>
+                            @endif
+                        </div></td>
                     </tr>
                 @empty
                     <tr><td colspan="6" class="p-10 text-center text-white/50">{{ $search !== '' || $status !== '' ? 'Tidak ada reservasi yang sesuai pencarian.' : 'Belum ada reservasi class.' }}</td></tr>

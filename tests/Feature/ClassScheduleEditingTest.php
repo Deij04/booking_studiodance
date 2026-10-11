@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\ClassRegistration;
 use App\Models\ClassSchedule;
 use App\Models\DanceClass;
-use App\Models\StudioSchedule;
+use App\Models\BookingSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -61,7 +61,7 @@ class ClassScheduleEditingTest extends TestCase
     {
         $this->actingAs(User::factory()->admin()->create());
         $schedule = ClassSchedule::factory()->create(['status' => 'inactive']);
-        $block = StudioSchedule::factory()->create(['studio_id' => $schedule->studio_id, 'date' => $schedule->date, 'start_time' => '18:00:00', 'end_time' => '19:00:00', 'status' => 'blocked']);
+        $block = BookingSetting::factory()->create(['studio_id' => $schedule->studio_id, 'date' => $schedule->date, 'start_time' => '18:00:00', 'end_time' => '19:00:00', 'status' => 'blocked']);
         $this->put(route('admin.class-schedules.update', $schedule), $this->data($schedule))->assertSessionHasErrors('start_time');
         $block->update(['status' => 'available']);
         $other = ClassSchedule::factory()->create(['studio_id' => $schedule->studio_id, 'date' => $schedule->date, 'start_time' => '18:00:00', 'end_time' => '19:00:00']);

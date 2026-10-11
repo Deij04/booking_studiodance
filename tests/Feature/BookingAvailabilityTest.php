@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\Reservation;
+use App\Models\Booking;
 use App\Models\Studio;
-use App\Models\StudioSchedule;
+use App\Models\BookingSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -19,21 +19,22 @@ class BookingAvailabilityTest extends TestCase
         $this->actingAs(User::factory()->admin()->create());
         $studio = Studio::factory()->create();
         $date = today()->addDay()->toDateString();
-        $schedule = StudioSchedule::factory()->recycle($studio)->create(['date' => $date, 'start_time' => '10:00:00', 'end_time' => '11:00:00']);
-        $booking = Reservation::factory()->create(['studio_schedule_id' => $schedule->id, 'status' => 'pending']);
+        $booking = Booking::factory()->create(['studio_id' => $studio->id, 'date' => $date, 'start_time' => '10:00:00', 'end_time' => '11:00:00', 'status' => 'pending']);
         $url = route('admin.bookings.availability', ['studio' => $studio, 'month' => substr($date, 0, 7)]);
         $slots = $this->getJson($url)->assertOk()->json('days')[$date];
         $this->assertSame(['08:00', '08:30', '09:00', '11:00'], array_keys($slots));
         $this->assertSame(['09:00', '09:30', '10:00'], $slots['08:00']);
         $this->assertSame(['12:00'], $slots['11:00']);
-        $schedule->update(['start_time' => '08:00:00', 'end_time' => '12:00:00']);
+        $booking->update(['status' => 'confirmed']);
+        $this->assertSame($slots, $this->getJson($url)->assertOk()->json('days')[$date]);
+        $booking->update(['start_time' => '08:00:00', 'end_time' => '12:00:00']);
         $this->assertSame([], $this->getJson($url)->assertOk()->json('days')[$date]);
         $otherStudio = Studio::factory()->create();
         $other = $this->getJson(route('admin.bookings.availability', ['studio' => $otherStudio, 'month' => substr($date, 0, 7)]))->assertOk()->json('days')[$date];
         $this->assertNotEmpty($other);
         $booking->update(['status' => 'cancelled']);
         $this->assertNotEmpty($this->getJson($url)->assertOk()->json('days')[$date]);
-        $schedule->update(['status' => 'blocked']);
+        BookingSetting::factory()->create(['studio_id' => $studio->id, 'date' => $date, 'start_time' => '08:00', 'end_time' => '12:00']);
         $this->assertSame([], $this->getJson($url)->assertOk()->json('days')[$date]);
     }
 

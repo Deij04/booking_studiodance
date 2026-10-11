@@ -4,9 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\ClassSchedule;
 use App\Models\DanceClass;
-use App\Models\Reservation;
+use App\Models\Booking;
 use App\Models\Studio;
-use App\Models\StudioSchedule;
+use App\Models\BookingSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -31,7 +31,7 @@ class ClassScheduleManagementTest extends TestCase
         ];
     }
 
-    public function test_staff_can_create_a_schedule_and_use_it_for_reservations(): void
+    public function test_staff_can_create_a_schedule_and_use_it_for_bookings(): void
     {
         $this->actingAs(User::factory()->admin()->create());
         $data = $this->data();
@@ -60,11 +60,11 @@ class ClassScheduleManagementTest extends TestCase
     {
         $this->actingAs(User::factory()->admin()->create());
         $data = $this->data();
-        $slot = StudioSchedule::factory()->create([
+        $slot = BookingSetting::factory()->create([
             'studio_id' => $data['studio_id'], 'date' => $data['date'],
             'start_time' => '18:00:00', 'end_time' => '19:00:00', 'status' => 'available',
         ]);
-        $booking = Reservation::factory()->create(['studio_schedule_id' => $slot->id, 'status' => 'pending']);
+        $booking = Booking::factory()->create(['studio_id' => $slot->studio_id, 'date' => $slot->date, 'start_time' => $slot->start_time, 'end_time' => $slot->end_time, 'status' => 'pending']);
         $this->post(route('admin.class-schedules.store'), $data)->assertSessionHasErrors('start_time');
         $booking->update(['status' => 'cancelled']);
         $slot->update(['status' => 'blocked']);

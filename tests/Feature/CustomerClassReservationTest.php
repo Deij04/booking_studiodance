@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\ClassPayment;
+use App\Models\Payment;
 use App\Models\ClassRegistration;
 use App\Models\ClassSchedule;
 use App\Models\DanceClass;
@@ -32,6 +32,19 @@ class CustomerClassReservationTest extends TestCase
         return ['payment_proof' => UploadedFile::fake()->create('proof.pdf', 12, 'application/pdf'), 'class_schedule_id' => $schedule->id, 'payment_method' => 'qris', 'payment_type' => 'full', 'notes' => 'First session'];
     }
 
+    public function test_class_requires_full_payment_and_rejects_dp(): void
+    {
+        Storage::fake('local');
+        $schedule = $this->makeSchedule();
+        $this->actingAs(User::factory()->create())->get(route('user.classes.reserve', $schedule->danceClass))->assertOk()
+            ->assertSee('Lunas (100%)')->assertDontSee('DP (50%)')->assertDontSee('Sisa Pelunasan');
+        $this->postJson(route('user.classes.store', $schedule->danceClass), array_replace($this->data($schedule), ['payment_type' => 'dp']))
+            ->assertUnprocessable()->assertJsonValidationErrors('payment_type');
+        $this->assertDatabaseCount('class_registrations', 0);
+        $this->assertDatabaseCount('payments', 0);
+        $this->assertSame([], Storage::disk('local')->allFiles());
+    }
+
     public function test_customer_reserves_self_and_admin_can_verify_private_payment(): void
     {
         Storage::fake('local');
@@ -55,8 +68,8 @@ class CustomerClassReservationTest extends TestCase
         $this->get(route('user.history'))->assertOk()->assertDontSee('Status verifikasi')->assertSee('Status Reservasi Kelas');
         $admin = User::factory()->admin()->create(['name' => 'Class Verifier']);
         $this->actingAs($admin)->get(route('admin.class-registrations.payment-proof', $registration))->assertOk();
-        $this->get(route('admin.class-registrations.edit', $registration))->assertOk()->assertSee('Lihat bukti pembayaran');
-        $this->put(route('admin.class-registrations.update', $registration), ['registration_status' => 'confirmed', 'payment_status' => 'paid'])->assertRedirect();
+        $this->get(route('admin.class-registrations.verify', $registration))->assertOk()->assertSee('Bukti Pembayaran')->assertSee('<iframe', false)->assertSee(route('admin.class-registrations.payment-proof', $registration))->assertDontSee('target="_blank"', false);
+        $this->patch(route('admin.class-registrations.decide', $registration), ['decision' => 'verified'])->assertRedirect();
         $this->assertSame($admin->id, $registration->payment->fresh()->verified_by);
         $this->actingAs($customer)->get(route('user.history'))->assertOk()->assertDontSee('Status verifikasi')->assertDontSee('Terverifikasi')->assertDontSee('Class Verifier');
     }
@@ -73,7 +86,7 @@ class CustomerClassReservationTest extends TestCase
             'payment_proof' => UploadedFile::fake()->create('proof.pdf', 12, 'application/pdf'),
         ]))->assertUnprocessable()->assertJsonValidationErrors('class_schedule_id');
         $this->assertDatabaseCount('class_registrations', 1);
-        $this->assertDatabaseCount('class_payments', 1);
+        $this->assertDatabaseCount('payments', 1);
         $this->assertCount(1, Storage::disk('local')->allFiles('class-payment-proofs'));
     }
 
@@ -93,7 +106,7 @@ class CustomerClassReservationTest extends TestCase
         $schedule->update(['status' => 'inactive']);
         $this->postJson(route('user.classes.store', $schedule->danceClass), $this->data($schedule))->assertUnprocessable()->assertJsonValidationErrors('class_schedule_id');
         $this->assertDatabaseCount('class_registrations', 0);
-        $this->assertDatabaseCount('class_payments', 0);
+        $this->assertDatabaseCount('payments', 0);
     }
 
     public function test_customer_flow_requires_login_and_disallows_staff(): void

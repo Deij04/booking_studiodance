@@ -82,7 +82,7 @@
                         <div class="studio-card-heading"><h3>{{ $studio->name }}</h3><span class="studio-rate">IDR {{ number_format($studio->price_per_hour, 0, '.', ',') }}<small>/hr</small></span></div>
                         @if($studio->description)<p class="user-studio-description">{{ __($studio->description) }}</p>@endif
                         <p class="studio-capacity"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3"/><path d="M3 21v-5a6 6 0 0 1 12 0v5m1-17a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 5v3"/></svg>{{ $studio->capacity }} people</p>
-                        <a class="studio-reserve" href="{{ route('user.reservations.create', ['studio_id' => $studio->id] + array_intersect_key($filters, array_flip(['date', 'start_time', 'end_time']))) }}">Reserve Now</a>
+                        <a class="studio-reserve" href="{{ route('user.bookings.create', ['studio_id' => $studio->id] + array_intersect_key($filters, array_flip(['date', 'start_time', 'end_time']))) }}">Reserve Now</a>
                     </div>
                 </article>
             @empty
@@ -93,7 +93,7 @@
     <section class="studio-benefits" aria-label="Studio services">
         <div class="studio-benefit-grid">
             <article class="studio-benefit"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M7 17v-5m5 5V7m5 10V9"/></svg><h2>Live Availability</h2><p>Choose a date and time to check studio availability against bookings and class schedules.</p></article>
-            <article class="studio-benefit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 2-9 12h6l-1 8 9-13h-6z"/></svg><h2>Easy Reservation</h2><p>Choose your studio and available time, then submit your reservation for approval.</p></article>
+            <article class="studio-benefit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 2-9 12h6l-1 8 9-13h-6z"/></svg><h2>Easy Booking</h2><p>Choose your studio and available time, then submit your reservation for approval.</p></article>
             <article class="studio-benefit"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18m-9 4v3l3 1"/></svg><h2>Plan Your Practice</h2><p>Explore time slots and choose a session that fits your practice schedule.</p></article>
             <article class="studio-benefit"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="m11 7-6 15m8-15 6 15M8 15h8"/></svg><h2>Space for Every Session</h2><p>Compare studio capacity and hourly rates to find the right space for your needs.</p></article>
         </div>

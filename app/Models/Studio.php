@@ -25,10 +25,12 @@ class Studio extends Model
         ];
     }
 
-    public function studioSchedules()
+    public function bookings()
     {
-        return $this->hasMany(StudioSchedule::class);
+        return $this->hasMany(Booking::class);
     }
+
+    public function bookingSettings() { return $this->hasMany(BookingSetting::class); }
 
     public function classSchedules()
     {
