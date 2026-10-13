@@ -39,7 +39,9 @@ class ClassController extends Controller
             $classes = $classes->filter(fn ($class) => $class->classSchedules->contains(fn ($schedule) => $schedule->occupied < $schedule->capacity));
         }
 
-        $catalog = DanceClass::where('status', 'active')->orderBy('name')->get();
+        $catalog = DanceClass::where('status', 'active')
+            ->when(!empty($filters['class_id']), fn ($query) => $query->where('id', $filters['class_id']))
+            ->orderBy('name')->get();
         $availableSchedules = $classes->flatMap(fn ($class) => $class->classSchedules
             ->filter(fn ($schedule) => $schedule->occupied < $schedule->capacity)
             ->map(fn ($schedule) => ['class' => $class, 'schedule' => $schedule]))

@@ -1,6 +1,9 @@
 @extends('layout.dashboard')
 
 @section('content')
+<style>
+[data-summary-tab]{color:#f2c83f;background:transparent;cursor:pointer}[data-summary-tab][aria-selected="true"]{color:#111;background:#f2c83f}[data-summary-tab]:focus-visible{outline:2px solid #f2c83f;outline-offset:4px}
+</style>
 <div class="mx-auto max-w-[1500px] p-4 sm:p-7 lg:p-10">
     <section class="relative overflow-hidden rounded-3xl border border-white/10 bg-[#171717] p-6 sm:p-8">
         <div class="absolute inset-y-0 right-0 hidden w-2/5 bg-[url('/images/Login.jpg')] bg-cover bg-center opacity-25 [mask-image:linear-gradient(to_right,transparent,black)] md:block"></div>
@@ -23,36 +26,77 @@
         </form>
     </section>
     @endif
+    <section class="mt-6" aria-label="Ringkasan reservasi" data-reservation-summary>
+        <div class="mb-4 flex gap-2" role="tablist" aria-label="Jenis reservasi">
+            <button id="summary-studio-tab" type="button" role="tab" aria-selected="true" aria-controls="summary-studio" tabindex="0" data-summary-tab="studio" class="rounded-xl border border-[#f2c83f]/30 px-5 py-3 text-sm font-semibold">Studio</button>
+            <button id="summary-class-tab" type="button" role="tab" aria-selected="false" aria-controls="summary-class" tabindex="-1" data-summary-tab="class" class="rounded-xl border border-[#f2c83f]/30 px-5 py-3 text-sm font-semibold">Class</button>
+        </div>
+        <div id="summary-studio" role="tabpanel" aria-labelledby="summary-studio-tab" data-summary-panel="studio">
     <section class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <article class="rounded-2xl border border-white/10 bg-[#171717] p-5"><p class="text-sm text-white/50">Total Booking</p><p class="mt-4 text-3xl font-bold">{{ $reservationCount }}</p><p class="mt-2 text-xs text-white/40">Seluruh booking pelanggan</p></article>
         @foreach(['requests' => ['Pengajuan Booking', $pendingCount, 'Perlu ditinjau'], 'active' => ['Booking Aktif', $confirmedCount, 'Sudah dikonfirmasi'], 'history' => ['Riwayat Booking', $historyCount, 'Selesai atau dibatalkan']] as $tab => [$label, $count, $description])
             <a href="{{ route('admin.bookings.index', ['tab' => $tab]) }}" class="rounded-2xl border border-white/10 bg-[#171717] p-5 transition hover:border-[#f2c83f]/50"><p class="text-sm text-white/50">{{ $label }}</p><p class="mt-4 text-3xl font-bold text-[#f2c83f]">{{ $count }}</p><p class="mt-2 text-xs text-white/40">{{ $description }} &rarr;</p></a>
         @endforeach
     </section>
+        </div>
+        <div id="summary-class" role="tabpanel" aria-labelledby="summary-class-tab" data-summary-panel="class" hidden>
+    <section class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <article class="rounded-2xl border border-white/10 bg-[#171717] p-5"><p class="text-sm text-white/50">Total Class</p><p class="mt-4 text-3xl font-bold">{{ $classReservationCount }}</p><p class="mt-2 text-xs text-white/40">Seluruh reservasi class pelanggan</p></article>
+        @foreach(['requests' => ['Pengajuan Class', $classPendingCount, 'Perlu ditinjau'], 'active' => ['Class Aktif', $classActiveCount, 'Sudah dikonfirmasi'], 'history' => ['Riwayat Class', $classHistoryCount, 'Selesai atau dibatalkan']] as $tab => [$label, $count, $description])
+            <a href="{{ route('admin.class-registrations.index', ['tab' => $tab]) }}" class="rounded-2xl border border-white/10 bg-[#171717] p-5 transition hover:border-[#f2c83f]/50"><p class="text-sm text-white/50">{{ $label }}</p><p class="mt-4 text-3xl font-bold text-[#f2c83f]">{{ $count }}</p><p class="mt-2 text-xs text-white/40">{{ $description }} &rarr;</p></a>
+        @endforeach
+    </section>
+        </div>
+    </section>
+    @if(auth()->user()->role === 'super_admin')
     <section class="mt-6 rounded-2xl border border-white/10 bg-[#171717] p-6">
         <p class="text-sm text-white/50">Akumulasi Pendapatan Penyewaan Studio</p>
         <p class="mt-3 text-3xl font-bold text-[#f2c83f]">Rp {{ number_format($bookingMetrics['revenue'], 0, ',', '.') }}</p>
         <p class="mt-2 text-xs text-white/50">Pembayaran awal dan pelunasan yang terverifikasi. Termasuk pembayaran pada booking dibatalkan.</p>
     </section>
+    <section class="mt-6 rounded-2xl border border-white/10 bg-[#171717] p-6">
+        <p class="text-sm text-white/50">Akumulasi Pendapatan Class</p>
+        <p class="mt-3 text-3xl font-bold text-[#f2c83f]">Rp {{ number_format($classMetrics['revenue'], 0, ',', '.') }}</p>
+        <p class="mt-2 text-xs text-white/50">Pembayaran awal dan pelunasan class yang terverifikasi. Termasuk pembayaran pada reservasi dibatalkan.</p>
+    </section>
+    <section class="mt-6 rounded-2xl border border-[#f2c83f]/30 bg-[#171717] p-6">
+        <p class="text-sm text-white/50">Total Akumulasi Pendapatan</p>
+        <p class="mt-3 text-3xl font-bold text-[#f2c83f]">Rp {{ number_format($bookingMetrics['revenue'] + $classMetrics['revenue'] + $membershipRevenue, 0, ',', '.') }}</p>
+        <p class="mt-2 text-xs text-white/50">Gabungan pembayaran studio dan class terverifikasi serta membership lunas, untuk seluruh periode.</p>
+    </section>
+    @endif
+    @php
+        $selectedChart = request('chart_type') === 'class' ? 'class' : 'studio';
+    @endphp
+    <section class="mt-6" aria-label="Grafik reservasi" data-reservation-summary>
+        <div class="mb-4 flex gap-2" role="tablist" aria-label="Jenis grafik">
+            @foreach(['studio' => 'Studio', 'class' => 'Class'] as $type => $label)
+                <button id="graph-{{ $type }}-tab" type="button" role="tab" aria-selected="{{ $selectedChart === $type ? 'true' : 'false' }}" aria-controls="graph-{{ $type }}" tabindex="{{ $selectedChart === $type ? 0 : -1 }}" data-summary-tab="{{ $type }}" class="rounded-xl border border-[#f2c83f]/30 px-5 py-3 text-sm font-semibold">{{ $label }}</button>
+            @endforeach
+        </div>
+    @foreach(['studio' => $bookingMetrics, 'class' => $classMetrics] as $chartType => $chartMetrics)
+    <div id="graph-{{ $chartType }}" role="tabpanel" aria-labelledby="graph-{{ $chartType }}-tab" data-summary-panel="{{ $chartType }}" @if($selectedChart !== $chartType) hidden @endif>
     <section class="mt-6 rounded-2xl border border-white/10 bg-[#171717] p-6" data-booking-charts>
-        <div class="flex flex-wrap items-center justify-between gap-4"><h2 class="text-lg font-semibold">Grafik Penyewaan Studio</h2><div class="flex flex-wrap gap-2" role="group" aria-label="Periode grafik">@foreach($bookingMetrics['charts'] as $key => $chart)<button type="button" data-chart-period="{{ $key }}" aria-pressed="{{ $loop->first ? 'true' : 'false' }}" class="rounded-lg border border-[#f2c83f]/30 px-3 py-2 text-sm text-[#f2c83f]">{{ $chart['label'] }}</button>@endforeach</div></div>
-        <p class="mt-2 text-xs text-white/50">Jumlah booking dikonfirmasi dan selesai menurut tanggal penggunaan (WITA). Pengajuan dan pembatalan tidak dihitung.</p>
+        <div class="flex flex-wrap items-center justify-between gap-4"><h2 class="text-lg font-semibold">{{ $chartType === 'studio' ? 'Grafik Penyewaan Studio' : 'Grafik Reservasi Class' }}</h2><div class="flex flex-wrap gap-2" role="group" aria-label="Periode grafik">@foreach($chartMetrics['charts'] as $key => $chart)<button type="button" data-chart-period="{{ $key }}" aria-pressed="{{ $chartMetrics['filters']['period'] === $key ? 'true' : 'false' }}" class="rounded-lg border border-[#f2c83f]/30 px-3 py-2 text-sm text-[#f2c83f]">{{ $chart['label'] }}</button>@endforeach</div></div>
+        <p class="mt-2 text-xs text-white/50">Jumlah reservasi dikonfirmasi dan selesai menurut tanggal penggunaan (WITA). Pengajuan dan pembatalan tidak dihitung. Filter berlaku untuk kedua grafik.</p>
         @if($errors->any())<div role="alert" class="mt-4 text-sm text-red-300">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
         <form method="GET" action="{{ route('admin.dashboard') }}" class="mt-5 flex flex-wrap items-end gap-3" data-chart-filter>
-            <label class="text-xs text-white/60">Dari tanggal<input type="date" name="from" value="{{ $bookingMetrics['filters']['from'] }}" class="mt-2 block rounded-lg border border-white/15 bg-[#0d0d0d] px-3 py-2 text-sm text-white [color-scheme:dark]"></label>
-            <label class="text-xs text-white/60">Sampai tanggal<input type="date" name="to" value="{{ $bookingMetrics['filters']['to'] }}" class="mt-2 block rounded-lg border border-white/15 bg-[#0d0d0d] px-3 py-2 text-sm text-white [color-scheme:dark]"></label>
-            <label class="text-xs text-white/60">Bulan<select name="month" class="mt-2 block rounded-lg border border-white/15 bg-[#0d0d0d] px-3 py-2 text-sm text-white"><option value="">Semua bulan</option>@foreach(range(1,12) as $month)<option value="{{ $month }}" @selected($bookingMetrics['filters']['month'] == $month)>{{ \Carbon\Carbon::create(2000, $month, 1)->locale('id')->translatedFormat('F') }}</option>@endforeach</select></label>
-            <label class="text-xs text-white/60">Tahun<input type="number" name="year" min="1900" max="2100" value="{{ $bookingMetrics['filters']['year'] }}" class="mt-2 block w-24 rounded-lg border border-white/15 bg-[#0d0d0d] px-3 py-2 text-sm text-white"></label>
+            <input type="hidden" name="period" value="{{ $chartMetrics['filters']['period'] }}">
+            <input type="hidden" name="chart_type" value="{{ $chartType }}">
+            <label data-week-filter @if($chartMetrics['filters']['period'] === 'month') hidden @endif class="text-xs text-white/60">Dari tanggal<input type="date" name="from" @disabled($chartMetrics['filters']['period'] === 'month') value="{{ $chartMetrics['filters']['from'] }}" class="mt-2 block rounded-lg border border-white/15 bg-[#0d0d0d] px-3 py-2 text-sm text-white [color-scheme:dark]"></label>
+            <label data-week-filter @if($chartMetrics['filters']['period'] === 'month') hidden @endif class="text-xs text-white/60">Sampai tanggal<input type="date" name="to" @disabled($chartMetrics['filters']['period'] === 'month') value="{{ $chartMetrics['filters']['to'] }}" class="mt-2 block rounded-lg border border-white/15 bg-[#0d0d0d] px-3 py-2 text-sm text-white [color-scheme:dark]"></label>
+            <label data-week-filter @if($chartMetrics['filters']['period'] === 'month') hidden @endif class="text-xs text-white/60">Bulan<select name="month" @disabled($chartMetrics['filters']['period'] === 'month') class="mt-2 block rounded-lg border border-white/15 bg-[#0d0d0d] px-3 py-2 text-sm text-white"><option value="">Semua bulan</option>@foreach(range(1,12) as $month)<option value="{{ $month }}" @selected($chartMetrics['filters']['month'] == $month)>{{ \Carbon\Carbon::create(2000, $month, 1)->locale('id')->translatedFormat('F') }}</option>@endforeach</select></label>
+            <label class="text-xs text-white/60">Tahun<input type="number" name="year" min="1900" max="2100" value="{{ $chartMetrics['filters']['year'] }}" class="mt-2 block w-24 rounded-lg border border-white/15 bg-[#0d0d0d] px-3 py-2 text-sm text-white"></label>
             <button class="rounded-lg bg-[#f2c83f] px-4 py-2 text-sm font-semibold text-black">Terapkan</button><a href="{{ route('admin.dashboard') }}" class="px-2 py-2 text-sm text-white/60">Reset</a>
         </form>
-        @foreach($bookingMetrics['charts'] as $key => $chart)
-            <div data-chart-panel="{{ $key }}" @if(!$loop->first) hidden @endif>
+        @foreach($chartMetrics['charts'] as $key => $chart)
+            <div data-chart-panel="{{ $key }}" @if($chartMetrics['filters']['period'] !== $key) hidden @endif>
                 @php
                     $peak = max(1, max(array_column($chart['points'], 'count')));
                     $chartWidth = max(900, count($chart['points']) * 140);
                 @endphp
-                <div class="mt-4 overflow-x-auto"><svg viewBox="0 0 {{ $chartWidth }} 260" role="img" aria-label="{{ $chart['label'] }}: {{ $chart['total'] }} penyewaan" style="width:100%;min-width:{{ $chartWidth }}px;height:auto">
-                    <title>{{ $chart['label'] }} - Jumlah penyewaan studio</title>
+                <div class="mt-4 overflow-x-auto"><svg viewBox="0 0 {{ $chartWidth }} 260" role="img" aria-label="{{ $chart['label'] }}: {{ $chart['total'] }} reservasi" style="width:100%;min-width:{{ $chartWidth }}px;height:auto">
+                    <title>{{ $chart['label'] }} - Jumlah reservasi</title>
                     @foreach([0, 1, 2] as $tick)
                         @php
                             $y = 210 - $tick * 90;
@@ -66,14 +110,17 @@
                             $x = 40 + $loop->index * $step;
                             $height = $point['count'] / $peak * 180;
                         @endphp
-                        <rect data-chart-bar data-chart-label="{{ $point['label'] }}" data-chart-count="{{ $point['count'] }}" tabindex="0" aria-label="{{ $point['label'] }}: {{ $point['count'] }} penyewaan" x="{{ $x }}" y="{{ 210 - $height }}" width="{{ max(8, $step - 8) }}" height="{{ max(1, $height) }}" rx="3" fill="#f2c83f"><title>{{ $point['label'] }}: {{ $point['count'] }} penyewaan</title></rect>
+                        <rect data-chart-bar data-chart-label="{{ $point['label'] }}" data-chart-count="{{ $point['count'] }}" tabindex="0" aria-label="{{ $point['label'] }}: {{ $point['count'] }} reservasi" x="{{ $x }}" y="{{ 210 - $height }}" width="{{ max(8, $step - 8) }}" height="{{ max(1, $height) }}" rx="3" fill="#f2c83f"><title>{{ $point['label'] }}: {{ $point['count'] }} reservasi</title></rect>
                         <text x="{{ $x + ($step - 8) / 2 }}" y="230" text-anchor="middle" fill="#aaa" font-size="10">{{ $key === 'week' ? substr($point['label'], 0, 10) : $point['label'] }}</text>
                         @if($point['count'])<text x="{{ $x + ($step - 8) / 2 }}" y="{{ 202 - $height }}" text-anchor="middle" fill="#fff" font-size="11">{{ $point['count'] }}</text>@endif
                     @endforeach
                 </svg></div>
-                @if(!$chart['total'])<p class="mt-2 text-sm text-white/50">Belum ada penyewaan pada periode ini.</p>@endif
+                @if(!$chart['total'])<p class="mt-2 text-sm text-white/50">Belum ada reservasi pada periode ini.</p>@endif
             </div>
         @endforeach
+    </section>
+    </div>
+    @endforeach
     </section>
     <div class="mt-6 flex flex-wrap gap-3">
         <a href="{{ route('admin.bookings.create') }}" class="rounded-xl bg-[#f2c83f] px-5 py-3 text-sm font-semibold text-black">+ Tambah Booking</a>
@@ -125,6 +172,29 @@
 @push('scripts')
 <script>
 const chartTooltip = document.createElement('div');
+document.querySelectorAll('[data-reservation-summary]').forEach(summary => {
+    const tabs = Array.from(summary.querySelectorAll('[data-summary-tab]'));
+    const selectTab = tab => {
+        tabs.forEach(button => {
+            button.setAttribute('aria-selected', String(button === tab));
+            button.tabIndex = button === tab ? 0 : -1;
+        });
+        summary.querySelectorAll('[data-summary-panel]').forEach(panel => {
+            panel.hidden = panel.dataset.summaryPanel !== tab.dataset.summaryTab;
+        });
+    };
+    tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => selectTab(tab));
+        tab.addEventListener('keydown', event => {
+            let next;
+            if (event.key === 'ArrowRight') next = tabs[(index + 1) % tabs.length];
+            if (event.key === 'ArrowLeft') next = tabs[(index + tabs.length - 1) % tabs.length];
+            if (event.key === 'Home') next = tabs[0];
+            if (event.key === 'End') next = tabs[tabs.length - 1];
+            if (next) { event.preventDefault(); selectTab(next); next.focus(); }
+        });
+    });
+});
 chartTooltip.setAttribute('role', 'tooltip');
 chartTooltip.hidden = true;
 chartTooltip.style.cssText = 'position:fixed;z-index:1000;pointer-events:none;background:#242016;border:1px solid #f2c83f;border-radius:8px;padding:10px 14px;color:#fff;font-size:13px;max-width:280px';
@@ -143,14 +213,27 @@ document.querySelectorAll('[data-chart-bar]').forEach(bar => {
     bar.addEventListener('pointerleave', () => chartTooltip.hidden = true);
     bar.addEventListener('blur', () => chartTooltip.hidden = true);
 });
-const chartFilter = document.querySelector('[data-chart-filter]');
+document.querySelectorAll('[data-chart-filter]').forEach(chartFilter => {
 chartFilter.querySelectorAll('[name="month"], [name="year"]').forEach(input => input.addEventListener('change', () => {
     chartFilter.elements.from.value = ''; chartFilter.elements.to.value = '';
 }));
-document.querySelectorAll('[data-chart-period]').forEach(button => button.addEventListener('click', () => {
+chartFilter.closest('[data-booking-charts]').querySelectorAll('[data-chart-period]').forEach(button => button.addEventListener('click', () => {
     chartTooltip.hidden = true;
-    document.querySelectorAll('[data-chart-panel]').forEach(panel => panel.hidden = panel.dataset.chartPanel !== button.dataset.chartPeriod);
-    document.querySelectorAll('[data-chart-period]').forEach(tab => tab.setAttribute('aria-pressed', String(tab === button)));
+    chartFilter.elements.period.value = button.dataset.chartPeriod;
+    const monthly = button.dataset.chartPeriod === 'month';
+    chartFilter.querySelectorAll('[data-week-filter]').forEach(label => {
+        label.hidden = monthly;
+        label.querySelector('input, select').disabled = monthly;
+    });
+    if (!monthly) {
+        chartFilter.elements.from.value = '';
+        chartFilter.elements.to.value = '';
+        chartFilter.elements.month.value = '{{ now('Asia/Makassar')->month }}';
+        chartFilter.elements.year.value = '{{ now('Asia/Makassar')->year }}';
+    }
+    chartFilter.requestSubmit();
+    chartFilter.closest('[data-booking-charts]').querySelectorAll('[data-chart-period]').forEach(tab => tab.setAttribute('aria-pressed', String(tab === button)));
 }));
+});
 </script>
 @endpush

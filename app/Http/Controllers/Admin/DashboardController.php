@@ -10,7 +10,11 @@ class DashboardController extends Controller
 {
     public function index(\Illuminate\Http\Request $request)
     {
+        if ($request->input('period') === 'month') {
+            $request->merge(['from' => null, 'to' => null, 'month' => null]);
+        }
         $filters = $request->validate([
+            'period' => ['nullable', \Illuminate\Validation\Rule::in(['week', 'month'])],
             'from' => ['nullable', 'required_with:to', 'date_format:Y-m-d'],
             'to' => ['nullable', 'required_with:from', 'date_format:Y-m-d', 'after_or_equal:from'],
             'month' => ['nullable', 'integer', 'between:1,12'],
@@ -31,10 +35,18 @@ class DashboardController extends Controller
             ->get();
 
         $bookingCounts = Booking::query()->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
+        $classCounts = \App\Models\ClassRegistration::query()->selectRaw('registration_status, COUNT(*) as total')->groupBy('registration_status')->pluck('total', 'registration_status');
+        $membershipRevenue = $user->role === 'super_admin' ? (float) \App\Models\Membership::where('payment_status', 'paid')->sum('price') : 0;
 
         return view('admin.dashboard.index', [
             'user' => $user,
+            'membershipRevenue' => $membershipRevenue,
+            'classReservationCount' => $classCounts->sum(),
+            'classPendingCount' => \App\Models\ClassRegistration::inReservationTab('requests')->count(),
+            'classActiveCount' => \App\Models\ClassRegistration::inReservationTab('active')->count(),
+            'classHistoryCount' => ($classCounts['completed'] ?? 0) + ($classCounts['cancelled'] ?? 0),
             'bookingMetrics' => app(\App\Services\BookingDashboardMetrics::class)->get($filters),
+            'classMetrics' => app(\App\Services\BookingDashboardMetrics::class)->get($filters, true),
             'reservationCount' => $bookingCounts->sum(),
             'pendingCount' => Booking::inBookingTab('requests')->count(),
             'confirmedCount' => Booking::inBookingTab('active')->count(),

@@ -87,6 +87,23 @@ class BookingCompletionMetricsTest extends TestCase
         $this->get(route('admin.dashboard', ['from' => '2026-11-03', 'to' => '2026-10-10']))->assertSessionHasErrors('to');
     }
 
+    public function test_monthly_mode_uses_full_selected_year_despite_stale_date_filters(): void
+    {
+        $this->travelTo(\Carbon\Carbon::parse('2026-10-11 12:00:00', 'Asia/Makassar'));
+        $this->booking();
+        $november = $this->booking();
+        $november->update(['date' => '2026-11-02']);
+        $filters = ['period' => 'month', 'year' => 2026, 'month' => 10, 'from' => '2026-10-01', 'to' => '2026-10-31'];
+        $metrics = app(BookingDashboardMetrics::class)->get($filters);
+        $this->assertCount(12, $metrics['charts']['month']['points']);
+        $this->assertSame(2, $metrics['charts']['month']['total']);
+        $this->assertSame('2026-01-01', $metrics['filters']['from']);
+        $this->assertSame('2026-12-31', $metrics['filters']['to']);
+        $this->actingAs(User::factory()->admin()->create())->get(route('admin.dashboard', $filters))
+            ->assertOk()->assertViewHas('bookingMetrics', fn ($data) => $data['filters']['period'] === 'month' && count($data['charts']['month']['points']) === 12)
+            ->assertSee('data-chart-panel="month" >', false);
+    }
+
     public function test_cancelled_dp_is_revenue_and_not_chart_rental(): void
     {
         $this->travelTo(\Carbon\Carbon::parse('2026-10-11 12:00:00', 'Asia/Makassar'));
@@ -100,7 +117,7 @@ class BookingCompletionMetricsTest extends TestCase
         foreach ($metrics['charts'] as $chart) $this->assertSame(2, $chart['total']);
         $dp->settlement->update(['verification_status' => 'verified', 'payment_stage' => 'settlement']);
         $this->assertSame(750000.0, app(BookingDashboardMetrics::class)->get()['revenue']);
-        $this->actingAs(User::factory()->admin()->create())->get(route('admin.dashboard'))->assertOk()
+        $this->actingAs(User::factory()->superAdmin()->create())->get(route('admin.dashboard'))->assertOk()
             ->assertSee('Rp 750.000')->assertSee('Grafik Penyewaan Studio')->assertSee('Mingguan')->assertSee('Bulanan')->assertDontSee('Tahunan');
     }
 }
