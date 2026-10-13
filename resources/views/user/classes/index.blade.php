@@ -56,7 +56,7 @@
     .studio-search-submit{display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:6px;background:linear-gradient(135deg,#f0cb45,#a78915);color:#171717;cursor:pointer;box-shadow:0 0 20px #d5b43a33}
     .studio-search-submit svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2}
     .studio-search-errors{padding:18px;color:#ffd7d7;background:#3c1b1b;border-radius:12px;margin-top:20px}
-.studio-search{margin:0 0 24px;grid-template-columns:1fr 1fr 1fr 48px}.class-search-reset{grid-column:1/-1;justify-self:end;font-size:12px;color:var(--gold)}
+.studio-search{margin:0 0 24px;grid-template-columns:1fr 1fr 1.2fr 1fr 48px}.class-search-reset{grid-column:1/-1;justify-self:end;font-size:12px;color:var(--gold)}
 @media(max-width:900px){.studio-search{grid-template-columns:1fr 1fr}.studio-search-submit{justify-self:end}}
 @media(max-width:600px){.studio-search{grid-template-columns:1fr;padding:20px;gap:16px}.studio-search input,.studio-search select{font-size:16px}.studio-search-submit{width:100%;height:44px}}
 </style>
@@ -93,7 +93,7 @@
         <h2 id="available-schedules-title" style="margin:0 0 10px">Available <span class="gold">Class Schedules</span></h2>
         <p class="sub" style="text-align:left;margin:0 0 24px">Choose your date, studio, and session. All times are in WITA.</p>
         <form class="studio-search" action="{{ route('user.classes.index') }}#available-schedules" method="GET">
-            @if(!empty($filters['class_id']))<input type="hidden" name="class_id" value="{{ $filters['class_id'] }}">@endif
+            <div><label for="class-filter">Dance Class</label><select id="class-filter" name="class_id"><option value="">All Classes</option>@foreach($classOptions as $option)<option value="{{ $option->id }}" @selected(old('class_id', $filters['class_id'] ?? '') == $option->id)>{{ $option->name }}</option>@endforeach</select></div>
             <div><label for="studio-date">Date</label><input id="studio-date" type="date" name="date" min="{{ today()->toDateString() }}" value="{{ old('date', $filters['date'] ?? '') }}"></div>
             <div>
                 <span class="studio-time-label">Time Slots</span>
@@ -109,15 +109,11 @@
                     @endforeach
                 </div>
             </div>
-            <div><label for="studio-type">Studio Type</label><select id="studio-type" name="studio_id"><option value="">All Studios</option>@foreach($studioOptions as $studio)<option value="{{ $studio->id }}" @selected(old('studio_id', $filters['studio_id'] ?? '') == $studio->id)>{{ $studio->name }}</option>@endforeach</select></div>
+            <div><label for="studio-type">Studio</label><select id="studio-type" name="studio_id"><option value="">All Studios</option>@foreach($studioOptions as $studio)<option value="{{ $studio->id }}" @selected(old('studio_id', $filters['studio_id'] ?? '') == $studio->id)>{{ $studio->name }}</option>@endforeach</select></div>
             <button class="studio-search-submit" type="submit" aria-label="Search class schedules"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg></button>
-            <a class="class-search-reset" href="{{ route('user.classes.index', array_filter(['class_id' => $filters['class_id'] ?? null])) }}">Reset</a>
+            <a class="class-search-reset" href="{{ route('user.classes.index') }}#available-schedules">Reset</a>
         </form>
         @if($errors->any())<div class="studio-search-errors" role="alert">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
-        <nav class="classes-filters" aria-label="Filter dance classes">
-            <a class="class-filter" href="{{ route('user.classes.index', array_diff_key($filters, ['class_id' => true])) }}" @if(empty($filters['class_id'])) aria-current="true" @endif>All Classes</a>
-            @foreach($classOptions as $option)<a class="class-filter" href="{{ route('user.classes.index', array_merge($filters, ['class_id' => $option->id])) }}" @if(($filters['class_id'] ?? null) == $option->id) aria-current="true" @endif>{{ $option->name }}</a>@endforeach
-        </nav>
         <div class="user-class-grid">
             @forelse($availableSchedules as $item)
                 @php($class = $item['class'])

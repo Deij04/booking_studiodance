@@ -34,10 +34,11 @@ class UserClassPageTest extends TestCase
         DanceClass::factory()->create(['status' => 'active']);
         $this->get(route('user.classes.index', ['class_id' => $first->id]))->assertOk()
             ->assertViewHas('classes', fn ($classes) => $classes->count() === 1 && $classes->first()->id === $first->id)
-            ->assertViewHas('catalog', fn ($catalog) => $catalog->count() === 2)
+            ->assertViewHas('catalog', fn ($catalog) => $catalog->count() === 1 && $catalog->first()->id === $first->id)
+            ->assertSee('id="class-filter" name="class_id"', false)
             ->assertSee('No available class schedules match your selection.');
         $this->get(route('user.classes.index', ['class_id' => 999999]))->assertOk()
-            ->assertViewHas('catalog', fn ($catalog) => $catalog->count() === 2)
+            ->assertViewHas('catalog', fn ($catalog) => $catalog->isEmpty())
             ->assertSee('No available class schedules match your selection.');
     }
     public function test_schedule_search_filters_class_sessions_and_studio_page_has_no_search_form(): void
