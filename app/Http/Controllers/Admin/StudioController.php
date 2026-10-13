@@ -89,8 +89,8 @@ class StudioController extends Controller
 
     public function destroy(Studio $studio): RedirectResponse
     {
-        if ($studio->bookings()->exists() || $studio->bookingSettings()->exists() || $studio->classSchedules()->exists()) {
-            return to_route('admin.studios.index')->with('error', 'Studio memiliki jadwal studio atau kelas. Nonaktifkan melalui Edit agar jadwal dan riwayat booking tetap tersimpan.');
+        if ($studio->bookings()->exists() || $studio->bookingSettings()->exists() || $studio->classSchedules()->exists() || \App\Models\MembershipPlan::where('studio_id', $studio->id)->exists() || \App\Models\Membership::where('studio_id', $studio->id)->exists()) {
+            return to_route('admin.studios.index')->with('error', 'Studio memiliki jadwal, booking, atau hubungan membership. Nonaktifkan melalui Edit agar jadwal dan riwayat booking tetap tersimpan.');
         }
 
         $image = $studio->image;

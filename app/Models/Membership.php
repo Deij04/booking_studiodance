@@ -17,7 +17,8 @@ class Membership extends Model
     }
 
     protected $fillable = [
-        'user_id',
+        'payment_proof',
+        'user_id', 'studio_id', 'quota_minutes', 'free_classes', 'verified_by', 'verified_by_name', 'verified_at',
         'membership_plan_id',
         'start_date',
         'end_date',
@@ -31,9 +32,14 @@ class Membership extends Model
         return [
             'start_date' => 'date',
             'end_date' => 'date',
-            'price' => 'decimal:2',
+            'price' => 'decimal:2', 'free_classes' => 'boolean', 'verified_at' => 'datetime',
         ];
     }
+
+    public function studio() { return $this->belongsTo(Studio::class); }
+    public function bookings() { return $this->hasMany(Booking::class); }
+    public function getRemainingMinutesAttribute(): int { return max(0, $this->quota_minutes - (int) $this->bookings()->where('status', '!=', 'cancelled')->sum('membership_minutes')); }
+    public function scopeValidOn($query, string $date) { return $query->where('status', 'active')->where('payment_status', 'paid')->whereDate('start_date', '<=', today())->whereDate('end_date', '>=', today())->whereDate('start_date', '<=', $date)->whereDate('end_date', '>=', $date); }
 
     public function user()
     {
@@ -42,6 +48,6 @@ class Membership extends Model
 
     public function membershipPlan()
     {
-        return $this->belongsTo(MembershipPlan::class);
+        return $this->belongsTo(MembershipPlan::class)->withTrashed();
     }
 }

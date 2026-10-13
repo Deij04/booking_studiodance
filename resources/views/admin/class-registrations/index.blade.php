@@ -38,7 +38,7 @@
                                 <a href="{{ route('admin.class-schedules.edit', $schedule) }}" class="rounded-xl border border-[#f2c83f]/30 px-3 py-2 text-sm text-[#f2c83f]">{{ $schedule->status === 'active' ? 'Edit Jadwal' : 'Edit / Aktifkan' }}</a>
                             @endif
                             @if($schedule->status === 'active')
-                                <form method="POST" action="{{ route('admin.class-schedules.deactivate', $schedule) }}">
+                                <form data-class-deactivate method="POST" action="{{ route('admin.class-schedules.deactivate', $schedule) }}">
                                     @csrf
                                     @method('PATCH')
                                     <button type="submit" title="Nonaktifkan jadwal class agar tidak menerima reservasi dan jam studio tersedia kembali. Riwayat peserta tetap tersimpan. Tidak dapat dinonaktifkan jika masih ada reservasi menunggu atau terkonfirmasi." class="rounded-xl border border-red-400/30 px-3 py-2 text-sm text-red-300 transition-colors hover:border-red-400/60 hover:bg-red-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-300">Nonaktifkan</button>
@@ -54,7 +54,7 @@
                                         <div class="min-w-0 flex-1"><p class="break-words text-sm font-medium"><a class="hover:underline" href="{{ route('admin.class-registrations.show', $participant) }}">{{ $participant->user->name }}</a></p><p class="mt-1 text-xs text-white/50">{{ $participant->display_status }} &middot; {{ app(\App\Services\PaymentSummary::class)->for($participant)['label'] }}</p></div>
                                         <div class="ml-auto flex shrink-0 items-center gap-3">
                                         <a href="{{ route('admin.class-registrations.show', $participant) }}" class="shrink-0 text-xs text-[#f2c83f] hover:underline" aria-label="Detail reservasi {{ $participant->user->name }}">Detail</a>
-                                            @if($participant->payment_status === 'unpaid' && $participant->registration_status !== 'cancelled')
+                                            @if($participant->payment?->verification_status === 'pending' && in_array($participant->registration_status, ['pending', 'confirmed'], true))
                                                 <a href="{{ route('admin.class-registrations.verify', $participant) }}" class="rounded-lg bg-[#f2c83f] px-3 py-2 text-xs font-semibold text-black">Verifikasi</a>
                                             @endif
                                         </div>

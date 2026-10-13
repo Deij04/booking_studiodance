@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\MembershipEnrollment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -31,9 +32,10 @@ class MembershipController extends Controller
             ->when($status === 'active', fn ($q) => $q->where('status', 'active')->whereDate('end_date', '>=', today()->toDateString()))
             ->when(in_array($status, ['pending', 'cancelled']), fn ($q) => $q->where('status', $status))
             ->latest('id')->paginate(10)->withQueryString();
-        $plans = MembershipPlan::latest('id')->paginate(6, ['*'], 'plans_page')->withQueryString();
+        $plans = MembershipPlan::withCount('memberships')->latest('id')->paginate(6, ['*'], 'plans_page')->withQueryString();
+        $transferPlans = MembershipPlan::where('status', 'active')->orderBy('name')->get();
 
-        return view('admin.memberships.index', compact('memberships', 'plans', 'search', 'status'));
+        return view('admin.memberships.index', compact('memberships', 'plans', 'transferPlans', 'search', 'status'));
     }
 
     public function create()
@@ -51,15 +53,49 @@ class MembershipController extends Controller
             'user_id' => ['required', Rule::exists('users', 'id')->where('role', 'customer')->where('status', 'active')],
             'membership_plan_id' => ['required', Rule::exists('membership_plans', 'id')->where('status', 'active')],
             'start_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today', 'before:9990-01-01'],
+            'payment_proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
         ]);
-        $enrollment->create($data);
+        $proof = $request->file('payment_proof')->store('membership-payment-proofs', 'local');
+        try {
+            DB::transaction(function () use ($data, $enrollment, $proof) {
+                $membership = $enrollment->create($data);
+                $membership->update(['payment_proof' => $proof]);
+            });
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($proof);
+            throw $exception;
+        }
 
         return to_route('admin.memberships.index')->with('success', 'Membership berhasil ditambahkan. Catat pembayaran untuk mengaktifkannya.');
     }
 
     public function edit(Membership $membership)
     {
-        return view('admin.memberships.form', ['membership' => $membership->load(['user', 'membershipPlan'])]);
+        return view('admin.memberships.form', ['membership' => $membership->load(['user', 'membershipPlan']), 'plans' => MembershipPlan::where('status', 'active')->where('id', '!=', $membership->membership_plan_id)->orderBy('name')->get()]);
+    }
+
+    public function paymentProof(Membership $membership)
+    {
+        abort_unless($membership->payment_proof && Storage::disk('local')->exists($membership->payment_proof), 404);
+
+        return Storage::disk('local')->response($membership->payment_proof);
+    }
+
+    public function transfer(Request $request, Membership $membership)
+    {
+        $data = $request->validate([
+            'target_plan_id' => ['required', 'integer', Rule::notIn([$membership->membership_plan_id]), Rule::exists('membership_plans', 'id')->whereNull('deleted_at')->where('status', 'active')],
+        ]);
+        DB::transaction(function () use ($membership, $data) {
+            $target = MembershipPlan::lockForUpdate()->findOrFail($data['target_plan_id']);
+            $current = Membership::lockForUpdate()->findOrFail($membership->id);
+            if ($target->status !== 'active' || $target->id === $current->membership_plan_id) {
+                throw ValidationException::withMessages(['target_plan_id' => 'Pilih paket aktif yang berbeda.']);
+            }
+            $current->update(['membership_plan_id' => $target->id]);
+        });
+
+        return to_route('admin.memberships.edit', $membership)->with('success', 'Member berhasil dialihkan ke paket lain.');
     }
 
     public function update(Request $request, Membership $membership)
@@ -102,7 +138,7 @@ class MembershipController extends Controller
                     throw ValidationException::withMessages(['payment_status' => 'Membership harus lunas sebelum diaktifkan.']);
                 }
                 if ($current->status === 'pending' && ! $current->start_date && ! $current->end_date) {
-                    $plan = MembershipPlan::lockForUpdate()->findOrFail($current->membership_plan_id);
+                    $plan = MembershipPlan::withTrashed()->lockForUpdate()->findOrFail($current->membership_plan_id);
                     $current->start_date = today();
                     $current->end_date = today()->addDays($plan->duration_days - 1);
                     $data['start_date'] = $current->start_date->toDateString();
@@ -124,6 +160,9 @@ class MembershipController extends Controller
                 if (! $awaitingApproval) {
                     $this->ensureNoOverlap($current->user_id, $current->start_date->toDateString(), $current->end_date->toDateString(), $current->id);
                 }
+            }
+            if (($data['payment_status'] ?? null) === 'paid' && $current->payment_status !== 'paid') {
+                $data += ['verified_by' => auth()->id(), 'verified_by_name' => auth()->user()->name, 'verified_at' => now()];
             }
             $current->update($data);
         });

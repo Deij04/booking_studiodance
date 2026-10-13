@@ -17,14 +17,14 @@ class Booking extends Model
 
     public const ONLINE_PAYMENT_METHODS = ['qris' => 'QRIS', 'bank_transfer' => 'Transfer Bank'];
 
-    public const PAYMENT_METHODS = self::ONLINE_PAYMENT_METHODS + ['cash' => 'Tunai'];
+    public const PAYMENT_METHODS = self::ONLINE_PAYMENT_METHODS + ['cash' => 'Tunai', 'membership' => 'Benefit Membership'];
 
     public const PAYMENT_STATUSES = ['unpaid' => 'Belum Terverifikasi', 'paid' => 'Terverifikasi'];
 
     protected $fillable = [
         'booking_code',
         'booking_name',
-        'user_id',
+        'user_id', 'membership_id', 'membership_minutes',
         'studio_id',
         'date',
         'start_time',
@@ -77,6 +77,8 @@ class Booking extends Model
     public function getPaymentMethodAttribute() { return $this->payment?->payment_method; }
     public function getPaymentTypeAttribute() { return $this->payment?->payment_type; }
     public function getPaymentProofAttribute() { return $this->payment?->payment_proof; }
+
+    public function membership() { return $this->belongsTo(Membership::class); }
 
     public function user()
     {

@@ -17,7 +17,7 @@ class ClassRegistration extends Model
     ];
 
     protected $fillable = [
-        'user_id',
+        'user_id', 'membership_id',
         'class_schedule_id',
         'registration_date',
         'price',
@@ -74,6 +74,8 @@ class ClassRegistration extends Model
 
     public function payments() { return $this->hasMany(Payment::class, 'class_registration_id'); }
     public function getPaymentStatusAttribute(): string { return $this->payment?->verification_status === 'verified' ? 'paid' : 'unpaid'; }
+
+    public function membership() { return $this->belongsTo(Membership::class); }
 
     public function user()
     {

@@ -14,7 +14,7 @@ class CustomerMembershipController extends Controller
         $this->authorizeCustomer($request);
 
         return view('user.memberships.index', [
-            'plans' => MembershipPlan::where('status', 'active')->orderBy('price')->get(),
+            'plans' => MembershipPlan::with('studio')->where('status', 'active')->orderBy('price')->get(),
             'memberships' => $request->user()->memberships()->with('membershipPlan')->latest('id')->paginate(10),
         ]);
     }

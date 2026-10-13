@@ -27,6 +27,7 @@ class MembershipEnrollment
 
                 return Membership::create([
                     'user_id' => $user->id, 'membership_plan_id' => $plan->id,
+                    'studio_id' => $plan->studio_id, 'quota_minutes' => ($plan->quota_hours ?? 0) * 60, 'free_classes' => $plan->free_classes,
                     'start_date' => null, 'end_date' => null,
                     'price' => $plan->price, 'payment_status' => 'unpaid', 'status' => 'pending',
                 ]);
@@ -39,6 +40,7 @@ class MembershipEnrollment
 
             return Membership::create([
                 'user_id' => $user->id, 'membership_plan_id' => $plan->id,
+                    'studio_id' => $plan->studio_id, 'quota_minutes' => ($plan->quota_hours ?? 0) * 60, 'free_classes' => $plan->free_classes,
                 'start_date' => $data['start_date'], 'end_date' => $end,
                 'price' => $plan->price, 'payment_status' => 'unpaid', 'status' => 'pending',
             ]);

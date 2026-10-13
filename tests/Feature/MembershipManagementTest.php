@@ -6,6 +6,8 @@ use App\Models\Membership;
 use App\Models\MembershipPlan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class MembershipManagementTest extends TestCase
@@ -15,6 +17,7 @@ class MembershipManagementTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Storage::fake('local');
         $this->withoutVite();
     }
 
@@ -30,7 +33,7 @@ class MembershipManagementTest extends TestCase
         $this->get(route('admin.membership-plans.edit', $plan))->assertOk()->assertSee('Paket Bulanan');
         $this->get(route('admin.memberships.create'))->assertOk()->assertSee('Paket Bulanan');
         $user = User::factory()->create();
-        $this->post(route('admin.memberships.store'), ['user_id' => $user->id, 'membership_plan_id' => $plan->id, 'start_date' => today()->toDateString(), 'price' => 1, 'end_date' => '2099-01-01', 'status' => 'active'])
+        $this->post(route('admin.memberships.store'), ['user_id' => $user->id, 'membership_plan_id' => $plan->id, 'start_date' => today()->toDateString(), 'payment_proof' => UploadedFile::fake()->create('receipt.pdf', 100, 'application/pdf'), 'price' => 1, 'end_date' => '2099-01-01', 'status' => 'active'])
             ->assertSessionHasNoErrors()->assertRedirect(route('admin.memberships.index'));
         $member = Membership::firstOrFail();
         $this->assertSame('150000.50', $member->price);
@@ -49,7 +52,7 @@ class MembershipManagementTest extends TestCase
     {
         $this->actingAs(User::factory()->superAdmin()->create());
         $plan = MembershipPlan::factory()->create(['duration_days' => 1, 'status' => 'active']);
-        $data = ['user_id' => User::factory()->create()->id, 'membership_plan_id' => $plan->id, 'start_date' => today()->toDateString()];
+        $data = ['payment_proof' => UploadedFile::fake()->create('receipt.pdf', 100, 'application/pdf'), 'user_id' => User::factory()->create()->id, 'membership_plan_id' => $plan->id, 'start_date' => today()->toDateString()];
         $this->post(route('admin.memberships.store'), $data)->assertSessionHasNoErrors();
         $first = Membership::firstOrFail();
         $this->assertSame(today()->toDateString(), $first->end_date->toDateString());

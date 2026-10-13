@@ -47,9 +47,27 @@ class ClassRegistrationController extends Controller
         return view('admin.class-registrations.index', compact('registrations', 'schedules', 'search', 'status', 'activeTab', 'tabs', 'tabCounts', 'date'));
     }
 
+    public function destroy(Request $request, ClassRegistration $classRegistration)
+    {
+        abort_unless($request->user()->role === 'super_admin', 403);
+        $proofs = DB::transaction(function () use ($classRegistration) {
+            $classRegistration->classSchedule()->lockForUpdate()->firstOrFail();
+            $record = ClassRegistration::lockForUpdate()->findOrFail($classRegistration->id);
+            $proofs = $record->payments()->pluck('payment_proof')->filter()->all();
+            $record->delete();
+            return $proofs;
+        });
+        foreach ($proofs as $proof) {
+            if (!str_contains($proof, '..') && preg_match('#^(booking-payment-proofs|payment-proofs|class-payment-proofs|settlement-proofs)/#', $proof)) {
+                Storage::disk('local')->delete($proof);
+            }
+        }
+        return to_route('admin.class-registrations.index')->with('success', 'Reservasi class berhasil dihapus.');
+    }
+
     public function create()
     {
-        $users = User::where('role', 'customer')->where('status', 'active')->orderBy('name')->get();
+        $users = User::with(['memberships' => fn ($query) => $query->validOn(today()->toDateString())->where('free_classes', true)])->where('role', 'customer')->where('status', 'active')->orderBy('name')->get();
         $schedules = ClassSchedule::with(['danceClass', 'studio'])
             ->withCount(['classRegistrations as occupied' => fn ($q) => $q->where('registration_status', '!=', 'cancelled')])
             ->where('status', 'active')->whereHas('danceClass', fn ($q) => $q->where('status', 'active'))
@@ -63,23 +81,43 @@ class ClassRegistrationController extends Controller
 
     public function store(Request $request)
     {
+        $selectedSchedule = ClassSchedule::find($request->input('class_schedule_id'));
+        $memberBenefit = $selectedSchedule && \App\Models\Membership::where('user_id', $request->input('user_id'))->validOn($selectedSchedule->date)->where('free_classes', true)->exists();
         $data = $request->validate([
             'user_id' => ['required', Rule::exists('users', 'id')->where('role', 'customer')->where('status', 'active')],
             'class_schedule_id' => ['required', 'exists:class_schedules,id'],
+            'payment_method' => ['required', Rule::in(array_keys(\App\Models\Booking::PAYMENT_METHODS))],
+            'payment_type' => ['required', Rule::in(['full'])],
+            'payment_proof' => [$memberBenefit ? 'nullable' : 'required_unless:payment_method,cash', 'nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
         ]);
-        DB::transaction(function () use ($data) {
+        $proof = $request->file('payment_proof')?->store('class-payment-proofs', 'local');
+        abort_if($proof === false, 500, 'Bukti pembayaran gagal disimpan.');
+        try {
+        DB::transaction(function () use ($data, $proof, $request) {
+            User::whereKey($data['user_id'])->lockForUpdate()->firstOrFail();
             $schedule = ClassSchedule::lockForUpdate()->findOrFail($data['class_schedule_id']);
             $this->ensureAvailable($schedule);
-            if ($schedule->classRegistrations()->where('user_id', $data['user_id'])->where('registration_status', '!=', 'cancelled')->exists()) {
-                throw ValidationException::withMessages(['user_id' => 'Peserta sudah terdaftar pada jadwal ini.']);
+            $membership = \App\Models\Membership::where('user_id', $data['user_id'])->validOn($schedule->date)->where('free_classes', true)->lockForUpdate()->first();
+            if (!$membership && $data['payment_method'] !== 'cash' && !$proof) throw ValidationException::withMessages(['payment_proof' => 'Bukti pembayaran wajib untuk customer tanpa benefit membership.']);
+            if (ClassRegistration::where('user_id', $data['user_id'])->whereIn('registration_status', ['pending', 'confirmed'])->whereHas('classSchedule', fn ($query) => $query->where('dance_class_id', $schedule->dance_class_id))->exists()) {
+                throw ValidationException::withMessages(['user_id' => 'Peserta masih memiliki reservasi menunggu atau dikonfirmasi pada class ini.']);
             }
-            $record = ClassRegistration::create($data + [
-                'registration_date' => today(), 'price' => $schedule->danceClass->price,
-                'registration_status' => 'pending',
+            if ($data['payment_method'] === 'membership' && !$membership) throw ValidationException::withMessages(['payment_method' => 'Benefit membership tidak berlaku untuk peserta dan jadwal ini.']);
+            $record = ClassRegistration::create([
+                'user_id' => $data['user_id'], 'class_schedule_id' => $data['class_schedule_id'],
+                'registration_date' => today(), 'price' => $membership ? 0 : $schedule->danceClass->price,
+                'membership_id' => $membership?->id, 'registration_status' => $membership ? 'confirmed' : 'pending',
             ]);
-            $record->payment()->create(['payment_stage' => 'initial', 'payment_method' => 'cash', 'amount' => $schedule->danceClass->price]);
+            $record->payment()->create(['payment_stage' => 'initial', 'payment_method' => $membership ? 'membership' : $data['payment_method'],
+                'payment_type' => 'full', 'payment_proof' => $proof, 'amount' => $membership ? 0 : $schedule->danceClass->price,
+                'verification_status' => $membership ? 'verified' : 'pending',
+                'verified_by' => $membership ? $request->user()->id : null, 'verified_by_name' => $membership ? $request->user()->name : null, 'verified_at' => $membership ? now() : null]);
         });
 
+        } catch (\Throwable $exception) {
+            if ($proof) Storage::disk('local')->delete($proof);
+            throw $exception;
+        }
         return to_route('admin.class-registrations.index')->with('success', 'Reservasi class berhasil ditambahkan.');
     }
 
@@ -92,7 +130,10 @@ class ClassRegistrationController extends Controller
 
     public function verification(ClassRegistration $classRegistration)
     {
-        abort_unless($classRegistration->payment_status === 'unpaid' && $classRegistration->registration_status === 'pending', 403);
+        if ($classRegistration->payment?->verification_status !== 'pending' || !in_array($classRegistration->registration_status, ['pending', 'confirmed'], true)) {
+            return to_route('admin.class-registrations.show', $classRegistration)
+                ->with('error', 'Pengajuan ini sudah diproses atau tidak lagi dapat diverifikasi. Silakan lihat detail reservasi.');
+        }
         return view('admin.class-registrations.verify', ['registration' => $classRegistration->load(['user', 'payment', 'classSchedule.danceClass', 'classSchedule.studio'])]);
     }
 
@@ -103,7 +144,9 @@ class ClassRegistrationController extends Controller
         DB::transaction(function () use ($classRegistration, $data, $request) {
             $schedule = ClassSchedule::lockForUpdate()->findOrFail($classRegistration->class_schedule_id);
             $record = ClassRegistration::lockForUpdate()->findOrFail($classRegistration->id);
-            abort_unless($record->payment_status === 'unpaid' && $record->registration_status === 'pending', 403);
+            if ($record->payment?->verification_status !== 'pending' || !in_array($record->registration_status, ['pending', 'confirmed'], true)) {
+                throw ValidationException::withMessages(['decision' => 'Pengajuan sudah diproses atau tidak lagi dapat diverifikasi. Muat ulang detail reservasi.']);
+            }
             $payment = $record->payment;
             if ($payment?->verification_status === 'rejected') {
                 throw ValidationException::withMessages(['decision' => 'Pengajuan ini sudah ditolak. Pelanggan perlu mendaftar lagi.']);
@@ -161,8 +204,13 @@ class ClassRegistrationController extends Controller
             if ($target->classRegistrations()->where('user_id', $userId)->where('id', '!=', $record->id)->where('registration_status', '!=', 'cancelled')->exists()) {
                 throw ValidationException::withMessages(['class_schedule_id' => 'Peserta sudah terdaftar pada jadwal tujuan.']);
             }
-            $record->update(['class_schedule_id' => $target->id, 'user_id' => $userId,
-                'price' => $target->id === $source->id ? $record->price : $target->danceClass->price]);
+            $membership = null;
+            if ($record->membership_id) {
+                $membership = \App\Models\Membership::where('user_id', $userId)->validOn($target->date)->where('free_classes', true)->lockForUpdate()->first();
+                if (!$membership) throw ValidationException::withMessages(['class_schedule_id' => 'Reservasi gratis hanya bisa dialihkan ke peserta dengan membership aktif pada tanggal jadwal tujuan.']);
+            }
+            $record->update(['membership_id' => $membership?->id, 'class_schedule_id' => $target->id, 'user_id' => $userId,
+                'price' => $membership ? 0 : ($target->id === $source->id ? $record->price : $target->danceClass->price)]);
         });
         return to_route('admin.class-registrations.index', ['tab' => $classRegistration->fresh()->registration_status === 'pending' ? 'classes' : 'active'])->with('success', 'Peserta dan jadwal diperbarui. Pembayaran tetap tercatat pada reservasi yang sama.');
     }

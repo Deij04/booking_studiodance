@@ -20,9 +20,28 @@
         <div class="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             @forelse($plans as $plan)
                 <article class="flex flex-col rounded-2xl border border-white/10 bg-[#171717] p-6">
-                    <div class="flex items-start justify-between gap-3"><h3 class="text-xl font-bold">{{ $plan->name }}</h3><span class="rounded-full bg-white/10 px-3 py-1 text-xs text-white/60">{{ $plan->status === 'active' ? 'Aktif' : 'Nonaktif' }}</span></div>
+                    <div class="flex items-start justify-between gap-3"><h3 class="text-xl font-bold">{{ $plan->display_name }}</h3><span class="rounded-full bg-white/10 px-3 py-1 text-xs text-white/60">{{ $plan->status === 'active' ? 'Aktif' : 'Nonaktif' }}</span></div>
                     <p class="mt-6 text-2xl font-bold text-[#f2c83f]">Rp {{ number_format($plan->price, 2, ',', '.') }}</p><p class="mt-1 text-sm text-white/50">Masa berlaku {{ $plan->duration_days }} hari</p>
                     <p class="my-5 whitespace-pre-line break-words text-sm leading-6 text-white/60">{{ $plan->description ?: 'Belum ada deskripsi paket.' }}</p>
+                    @if($plan->memberships_count > 0)
+                        <div class="mb-4 rounded-xl border border-white/10 p-4">
+                            <p class="text-sm text-[#f2c83f]">Paket memiliki {{ $plan->memberships_count }} keanggotaan dan belum bisa dihapus.</p>
+                            @php($targets = $transferPlans->where('id', '!=', $plan->id))
+                            @if($targets->isNotEmpty())
+                                <form method="POST" action="{{ route('admin.membership-plans.transfer', $plan) }}" class="mt-3">
+                                    @csrf
+                                    <label for="target-plan-{{ $plan->id }}" class="text-xs text-white/60">Alihkan semua member ke paket</label>
+                                    <select id="target-plan-{{ $plan->id }}" name="target_plan_id" required class="mt-2 block w-full rounded-xl border border-white/15 bg-[#0d0d0d] px-3 py-3 text-sm"><option value="">Pilih paket tujuan</option>@foreach($targets as $target)<option value="{{ $target->id }}">{{ $target->display_name }}</option>@endforeach</select>
+                                    <p class="mt-2 text-xs leading-5 text-white/50">Seluruh keanggotaan, termasuk riwayat, dialihkan. Harga, masa berlaku, pembayaran, dan benefit yang sudah diberikan tetap mengikuti keanggotaan semula.</p>
+                                    <button data-save-confirm type="submit" class="mt-3 rounded-xl bg-[#f2c83f] px-4 py-3 text-sm font-semibold text-black">Alihkan Member</button>
+                                </form>
+                            @else
+                                <p class="mt-2 text-xs text-white/50">Tambahkan atau aktifkan paket lain sebagai tujuan pengalihan.</p>
+                            @endif
+                        </div>
+                    @else
+                        <form data-plan-delete method="POST" action="{{ route('admin.membership-plans.destroy', $plan) }}" class="mb-4">@csrf @method('DELETE')<button type="submit" class="text-sm text-red-300 hover:underline">Hapus Paket</button></form>
+                    @endif
                     <a href="{{ route('admin.membership-plans.edit', $plan) }}" class="mt-auto border-t border-white/10 pt-4 text-sm font-semibold text-[#f2c83f]">Edit Paket</a>
                 </article>
             @empty
@@ -41,7 +60,7 @@
             <thead class="border-b border-white/10 text-white/50"><tr><th class="p-4">Member</th><th class="p-4">Paket</th><th class="p-4">Periode</th><th class="p-4">Harga</th><th class="p-4">Pembayaran</th><th class="p-4">Status</th><th class="p-4">Aksi</th></tr></thead>
             <tbody class="divide-y divide-white/10">
                 @forelse($memberships as $membership)
-                    <tr><td class="p-4"><p class="font-semibold">{{ $membership->user->name }}</p><p class="mt-1 text-xs text-white/50">{{ $membership->user->email }}</p></td><td class="p-4">{{ $membership->membershipPlan->name }}</td><td class="p-4">{{ $membership->start_date?->format('d/m/Y') ?? '-' }} &ndash; {{ $membership->end_date?->format('d/m/Y') ?? '-' }}</td><td class="p-4">Rp {{ number_format($membership->price, 2, ',', '.') }}</td><td class="p-4 {{ $membership->payment_status === 'paid' ? 'text-green-300' : 'text-[#f2c83f]' }}">{{ $membership->payment_status === 'paid' ? 'Lunas' : 'Belum Lunas' }}</td><td class="p-4">{{ \App\Models\Membership::STATUSES[$membership->effective_status] }}</td><td class="p-4"><a href="{{ route('admin.memberships.edit', $membership) }}" class="text-[#f2c83f]">Edit</a></td></tr>
+                    <tr><td class="p-4"><p class="font-semibold">{{ $membership->user->name }}</p><p class="mt-1 text-xs text-white/50">{{ $membership->user->email }}</p></td><td class="p-4">{{ $membership->membershipPlan->display_name }}</td><td class="p-4">{{ $membership->start_date?->format('d/m/Y') ?? '-' }} &ndash; {{ $membership->end_date?->format('d/m/Y') ?? '-' }}</td><td class="p-4">Rp {{ number_format($membership->price, 2, ',', '.') }}</td><td class="p-4 {{ $membership->payment_status === 'paid' ? 'text-green-300' : 'text-[#f2c83f]' }}">{{ $membership->payment_status === 'paid' ? 'Lunas' : 'Belum Lunas' }}@if($membership->verified_by_name)<p class="mt-1 text-xs text-white/50">Diverifikasi: {{ $membership->verified_by_name }}</p>@endif</td><td class="p-4">{{ \App\Models\Membership::STATUSES[$membership->effective_status] }}</td><td class="p-4"><a href="{{ route('admin.memberships.edit', $membership) }}" class="text-[#f2c83f]">Edit</a></td></tr>
                     @if($membership->status === 'pending')
                         <tr><td colspan="7" class="px-4 pb-4 pt-2">@include('admin.memberships.decisions')</td></tr>
                     @endif

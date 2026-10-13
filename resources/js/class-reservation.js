@@ -6,6 +6,7 @@ if (form) {
     const type = find('#class-payment-type');
     const errors = find('[data-class-errors]');
     const submit = find('[data-class-submit]');
+    const membershipBenefit = () => Boolean(form.dataset.memberStart && session()?.dataset.dateKey >= form.dataset.memberStart && session()?.dataset.dateKey <= form.dataset.memberEnd);
     let busy = false;
     function show(step) {
         form.querySelectorAll('[data-class-step]').forEach(panel => { panel.hidden = panel.dataset.classStep !== step; });
@@ -25,15 +26,20 @@ if (form) {
         const selected = session();
         find('[data-class-next="details"]').disabled = !selected;
         for (const field of ['date', 'time', 'studio']) form.querySelectorAll(`[data-class-${field}]`).forEach(element => { element.textContent = selected?.dataset[field] ?? ''; });
-        find('[data-class-method-label]').textContent = method.selectedOptions[0].textContent;
+        const member = membershipBenefit();
+        method.required = !member; method.disabled = member;
+        find('#class-payment-proof').required = !member;
+        find('[data-class-proof-panel]').hidden = member;
+        find('[data-class-method-label]').textContent = member ? 'Benefit Membership' : method.selectedOptions[0].textContent;
         find('[data-class-type-label]').textContent = 'Lunas (100%)';
-        const total = Number(form.dataset.price);
+        const total = member ? 0 : Number(form.dataset.price);
         const due = total;
         const currency = value => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 2 }).format(value);
-        find('[data-class-due-label]').textContent = 'Bayar Lunas';
+        find('[data-class-due-label]').textContent = member ? 'Gratis dengan Membership' : 'Bayar Lunas';
         find('[data-class-due]').textContent = currency(due);
-        find('[data-class-qris]').hidden = method.value !== 'qris';
-        find('[data-class-bank]').hidden = method.value !== 'bank_transfer';
+        form.querySelectorAll('[data-class-cost]').forEach(element => { element.textContent = currency(total); });
+        find('[data-class-qris]').hidden = member || method.value !== 'qris';
+        find('[data-class-bank]').hidden = member || method.value !== 'bank_transfer';
     }
     function showErrors(messages) {
         errors.replaceChildren(...messages.map(message => { const p = document.createElement('p'); p.textContent = message; return p; }));
@@ -53,7 +59,7 @@ if (form) {
         if (busy) return;
         if (!session()) { showErrors(['Pilih sesi kelas yang tersedia.']); show('sessions'); return; }
         const proof = find('#class-payment-proof').files[0];
-        if (!proof) { showErrors(['Bukti pembayaran wajib diunggah.']); return; }
+        if (!proof && !membershipBenefit()) { showErrors(['Bukti pembayaran wajib diunggah.']); return; }
         if (proof && proof.size > 2048 * 1024) { showErrors(['Ukuran bukti pembayaran maksimal 2 MB.']); return; }
         busy = true; submit.disabled = true; submit.textContent = 'Submitting...'; errors.hidden = true;
         try {

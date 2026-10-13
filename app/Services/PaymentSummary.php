@@ -17,7 +17,7 @@ class PaymentSummary
         $remaining = max(0.0, round($total - $paid, 2));
         $rentalStatus = $class ? $record->registration_status : $record->status;
         return compact('total', 'dp', 'firstAmount', 'verified', 'settlement', 'paid', 'remaining', 'initial', 'rentalStatus') + [
-            'label' => $class && !$verified && $initial?->verification_status === 'rejected' ? 'Belum Terverifikasi' : ($remaining <= 0 ? 'Lunas' : ($verified ? ($dp ? 'DP Terverifikasi - Belum Lunas' : 'Belum Lunas') : 'Menunggu Pembayaran / Verifikasi')),
+            'label' => $record->membership_id && $total <= 0 ? 'Gratis - Benefit Membership' : ($class && !$verified && $initial?->verification_status === 'rejected' ? 'Belum Terverifikasi' : ($remaining <= 0 ? 'Lunas' : ($verified ? ($dp ? 'DP Terverifikasi - Belum Lunas' : 'Belum Lunas') : 'Menunggu Pembayaran / Verifikasi'))),
             'canSettle' => $verified && $remaining > 0 && $rentalStatus === 'confirmed' && !$record->settlements()->where('verification_status', 'pending')->exists(),
         ];
     }

@@ -135,19 +135,19 @@
         <h1><span><strong>Dance</strong> Without</span><span>Limits, <strong>Together</strong></span></h1>
         <p class="dance-hero-description">Orange Dance Academy helps you reserve dance studios, explore available schedules, and join your favorite dance classes faster, easier, and more conveniently through one seamless online platform.</p>
         <div class="dance-hero-actions">
-            <a class="btn btn-fill" href="#studio">Book Studio Now</a>
-            <a class="btn" href="#class">View All Classes</a>
+            <a class="btn btn-fill" href="{{ route('user.studios.index') }}">Book Studio Now</a>
+            <a class="btn" href="{{ route('user.classes.index') }}">View All Classes</a>
         </div>
         <div class="dance-feature-grid">
-            <a class="dance-feature" href="#studio">
+            <a class="dance-feature" href="{{ route('user.studios.index') }}">
                 <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M11 18V6h10v12M14 10h4M8 18h16v7H8zM5 28v-7h3m19 7v-7h-3M12 25v3m8-3v3"/></svg>
                 <strong>Studio Booking</strong>
             </a>
-            <a class="dance-feature" href="#availability">
+            <a class="dance-feature" href="{{ route('user.studios.index') }}">
                 <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11"/><path d="M16 8v8l5 3"/></svg>
                 <strong>Studio Schedule</strong>
             </a>
-            <a class="dance-feature" href="#class">
+            <a class="dance-feature" href="{{ route('user.classes.index') }}">
                 <svg viewBox="0 0 32 32" aria-hidden="true"><path d="m7 17 1-9 9-1M8 8l16 16m-9 1 9-1 1-9M5 10l6-6m10 24 7-7"/></svg>
                 <strong>Dance Classes</strong>
             </a>
@@ -206,31 +206,20 @@
                     <h2>Studio Availability Today</h2>
                     <p>Check the nearest available studio slots and reserve your session in real-time.</p>
                 </div>
-                <button class="availability-see-all" type="button" id="availability-see-all" aria-haspopup="dialog" aria-controls="availability-dialog">SEE ALL <span aria-hidden="true">→</span></button>
+                <a class="availability-see-all" href="{{ route('user.studios.index') }}">SEE ALL <span aria-hidden="true">&rarr;</span></a>
             </div>
             <div class="availability-slots" id="availability-preview">
-                @foreach ([['Studio 2', '08:00 - 10:00'], ['Studio 3', '08:00 - 10:00'], ['Studio 2', '15:00 - 17:00'], ['Studio 3', '18:00 - 20:00']] as [$name, $time])
-                    <div class="availability-slot">
+                @forelse ($availability as $slot)
+                    <a class="availability-slot" href="{{ route('user.bookings.create', ['studio_id' => $slot['studio']->id, 'date' => $slot['date'], 'start_time' => $slot['start'], 'end_time' => $slot['end']]) }}">
                         <span class="availability-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 21h14M7 21V4l9-1v18M16 6h2v15M10 7v2m0 3v2m3-1v1"/></svg></span>
-                        <div class="availability-slot-info"><h3>{{ $name }}</h3><p>{{ $time }}</p></div>
+                        <div class="availability-slot-info"><h3>{{ $slot['studio']->name }}</h3><p>{{ $slot['start'] }} - {{ $slot['end'] }} WITA</p></div>
                         <span class="availability-status">Available</span>
-                    </div>
-                @endforeach
+                    </a>
+                @empty
+                    <p class="sub">No available studio slots today. View studios to choose another date.</p>
+                @endforelse
             </div>
         </div>
-        <dialog id="availability-dialog" class="availability-dialog" aria-labelledby="availability-dialog-title">
-            <form method="dialog"><button class="availability-see-all" autofocus>Close ×</button></form>
-            <h2 id="availability-dialog-title">Studio Availability Today</h2>
-            <p>Sample available slots. Live studio availability is not connected yet.</p>
-            <div class="availability-slots" id="availability-all-slots"></div>
-        </dialog>
-        <script>
-            document.getElementById('availability-see-all').addEventListener('click', () => {
-                const slots = document.getElementById('availability-preview');
-                document.getElementById('availability-all-slots').replaceChildren(...Array.from(slots.children, (slot) => slot.cloneNode(true)));
-                document.getElementById('availability-dialog').showModal();
-            });
-        </script>
     </section>
 
     <section class="section">
@@ -239,8 +228,8 @@
             <h2 class="section-title" style="margin-top:0">Move Without <span class="gold">Limits</span></h2>
             <p class="sub" style="margin-bottom:18px">Studio bookings, dance classes, and memberships in one simple experience.</p>
             <div class="hero-actions" style="justify-content:center">
-                <a class="btn btn-fill" href="#studio">Book Studio</a>
-                <a class="btn" href="#class">Explore Classes</a>
+                <a class="btn btn-fill" href="{{ route('user.studios.index') }}">Book Studio</a>
+                <a class="btn" href="{{ route('user.classes.index') }}">Explore Classes</a>
             </div>
         </div>
     </section>
@@ -249,25 +238,24 @@
         <h2 class="section-title"><span class="gold">Dance</span> Class</h2>
         <p class="sub">Discover premium dance classes designed to improve your skills, rhythm, and stage presence.</p>
         <div class="dance-class-track" tabindex="0" role="region" aria-label="Dance classes: scroll to explore more classes">
-            @foreach ([
-                ['name' => 'HipHop Beginner', 'coach' => 'Alex', 'price' => '$15', 'position' => '20% center', 'description' => 'Learn hip-hop basics, groove, and movement coordination for beginners.'],
-                ['name' => 'Heels Class', 'coach' => 'Sarah', 'price' => '$30', 'position' => '45% center', 'description' => 'Build balance, posture, and confidence through heels choreography.'],
-                ['name' => 'Afro Fusion', 'coach' => 'Zed', 'price' => '$20', 'position' => '70% center', 'description' => 'Explore rhythm and energetic movement through Afro Fusion choreography.'],
-                ['name' => 'Contemporary', 'coach' => 'Elena', 'price' => '$35', 'position' => '95% center', 'description' => 'Develop expression, flexibility, and fluid movement through contemporary dance.'],
-            ] as $danceClass)
+            @forelse ($danceClasses as $danceClass)
                 <article class="dance-class-card">
-                    <div class="dance-class-photo" style="--photo-position:{{ $danceClass['position'] }}">
-                        <img src="{{ asset('images/Login.jpg') }}" alt="" loading="lazy" width="736" height="1104">
-                        <span class="dance-class-price">{{ $danceClass['price'] }}</span>
+                    <div class="dance-class-photo">
+                        @if($danceClass->image)
+                            <img src="{{ asset('storage/'.$danceClass->image) }}" alt="{{ $danceClass->name }}" loading="lazy">
+                        @endif
+                        <span class="dance-class-price">Rp {{ number_format($danceClass->price, 0, ',', '.') }}</span>
                     </div>
                     <div class="dance-class-body">
-                        <h3>{{ $danceClass['name'] }}</h3>
-                        <p class="dance-class-coach">Coach: {{ $danceClass['coach'] }}</p>
-                        <a class="dance-class-reserve" href="{{ auth()->check() && auth()->user()->can('access-admin') ? route('admin.class-registrations.create') : route('login') }}" aria-label="Reserve Spot - {{ $danceClass['name'] }}">Reserve Spot</a>
-                        <p id="dance-class-detail-{{ $loop->index }}" class="dance-class-details" hidden>{{ $danceClass['description'] }}</p>
+                        <h3>{{ $danceClass->name }}</h3>
+                        <p class="dance-class-coach">{{ \App\Models\DanceClass::LEVELS[$danceClass->level] ?? $danceClass->level }}</p>
+                        <a class="dance-class-reserve" href="{{ route('user.classes.index', ['class_id' => $danceClass->id]) }}" aria-label="View schedules - {{ $danceClass->name }}">View Schedules</a>
+                        @if($danceClass->description)<p class="dance-class-details">{{ $danceClass->description }}</p>@endif
                     </div>
                 </article>
-            @endforeach
+            @empty
+                <p class="sub">No dance classes are currently available.</p>
+            @endforelse
         </div>
         <a class="dance-class-more" href="{{ route('user.classes.index') }}">SEE MORE</a>
     </section>
@@ -277,9 +265,9 @@
             <div style="display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap">
                 <div>
                     <h2 style="margin:0 0 6px;color:#171717">Get Exclusive Member Benefits</h2>
-                    <div style="color:#2a2208">Priority booking, discounts, and access to plan membership.</div>
+                    <div style="color:#2a2208">Explore membership plans, prices, and available benefits.</div>
                 </div>
-                <a class="btn" style="border-color:#171717;color:#171717" href="{{ route('login') }}">Join Now</a>
+                <a class="btn" style="border-color:#171717;color:#171717" href="{{ route('memberships.index') }}">Join Now</a>
             </div>
         </div>
     </section>

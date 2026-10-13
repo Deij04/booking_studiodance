@@ -23,7 +23,7 @@ class MembershipApplicationTest extends TestCase
         $customer = User::factory()->create();
         $other = User::factory()->create();
         $plan = MembershipPlan::factory()->create(['status' => 'active', 'duration_days' => 30, 'price' => 150000]);
-        $this->actingAs($customer)->get(route('memberships.index'))->assertOk()->assertViewIs('user.memberships.index')->assertSee('Book Membership');
+        $this->actingAs($customer)->get(route('memberships.index'))->assertOk()->assertViewIs('user.memberships.index')->assertSee('Daftar Membership');
         $data = ['membership_plan_id' => $plan->id, 'start_date' => today()->toDateString(), 'user_id' => $other->id, 'price' => 1, 'payment_status' => 'paid', 'status' => 'active'];
         $this->post(route('memberships.store'), $data)->assertSessionHasNoErrors()->assertRedirect(route('memberships.index'));
         $member = Membership::firstOrFail();
@@ -35,7 +35,7 @@ class MembershipApplicationTest extends TestCase
         $this->assertNull($member->end_date);
         $this->post(route('memberships.store'), $data)->assertSessionHasErrors('membership_plan_id');
         $this->actingAs(User::factory()->admin()->create());
-        $this->get(route('admin.memberships.index'))->assertOk()->assertSee($customer->email)->assertSee('Setujui')->assertSee('Tolak')->assertSee('Tambah Membership');
+        $this->get(route('admin.memberships.index'))->assertOk()->assertSee($customer->email)->assertSee('Verifikasi &amp; Aktifkan', false)->assertSee('Tolak')->assertSee('Tambah Membership');
         $this->patch(route('admin.memberships.decide', $member), ['decision' => 'approve'])->assertSessionHasErrors('payment_confirmed');
         $this->assertSame('pending', $member->fresh()->status);
         $this->patch(route('admin.memberships.decide', $member), ['decision' => 'approve', 'payment_confirmed' => 1])->assertSessionHasNoErrors();

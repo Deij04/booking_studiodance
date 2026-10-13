@@ -45,17 +45,21 @@
     <header class="membership-heading">
         <span class="membership-brand">Orange Dance Academy</span>
         <h1>Our <span>Membership</span></h1>
-        <p>Choose your next step in dance. Explore our membership plans and find the right fit for your journey.</p>
+        <p>Lebih banyak latihan, lebih banyak gerak. Nikmati kuota studio dan class gratis dengan membership aktif.</p>
     </header>
     @if(session('success'))<p role="status" class="membership-notice">{{ session('success') }}</p>@endif
     @if($errors->any())<div role="alert" class="membership-notice membership-notice-error"><ul>@foreach($errors->all() as $error)<li>{{ __($error) }}</li>@endforeach</ul></div>@endif
     <div class="membership-plan-grid">
         @forelse($plans as $plan)
             <article class="membership-plan">
-                <h2 class="membership-plan-name">{{ $plan->name }}</h2>
+                <h2 class="membership-plan-name">{{ $plan->display_name }}</h2>
                 <p class="membership-plan-price"><span>IDR</span><strong>{{ number_format($plan->price, 0, '.', ',') }}</strong></p>
                 <p class="membership-duration">{{ $plan->duration_days }} days of membership</p>
                 <ul class="membership-features">
+                    <li>Studio: {{ $plan->studio?->name ?? 'Semua studio aktif' }}</li>
+                    @if($plan->studio && $plan->quota_hours && $plan->studio->price_per_hour * $plan->quota_hours > $plan->price)<li>Hemat Rp {{ number_format($plan->studio->price_per_hour * $plan->quota_hours - $plan->price, 0, ',', '.') }} dibanding tarif reguler untuk {{ $plan->quota_hours }} jam.</li>@endif
+                    @if($plan->quota_hours)<li>Kuota {{ $plan->quota_hours }} jam sewa studio per periode; pilih jadwal yang tersedia.</li><li>Sisa kuota hangus setelah periode berakhir.</li>@endif
+                    @if($plan->free_classes)<li>Gratis daftar dance class selama membership aktif, sesuai jadwal dan kapasitas.</li>@endif
                     @if($plan->description)
                         @foreach(preg_split('/\r\n|\r|\n/', __($plan->description)) as $benefit)
                             @if(trim($benefit) !== '')<li>{{ $benefit }}</li>@endif
@@ -68,7 +72,7 @@
                 <form method="POST" action="{{ route('memberships.store') }}">
                     @csrf
                     <input type="hidden" name="membership_plan_id" value="{{ $plan->id }}">
-                    <button class="membership-book" type="submit">Book Membership</button>
+                    <button data-save-confirm class="membership-book" type="submit">Daftar Membership</button>
                 </form>
             </article>
         @empty
@@ -81,8 +85,9 @@
     <p class="membership-history-intro">Start and end dates are assigned upon approval. The end date is included in your membership period.</p>
     @forelse($memberships as $membership)
         <article class="membership-history-card">
-            <h3>{{ $membership->membershipPlan->name }}</h3>
+            <h3>{{ $membership->membershipPlan->display_name }}</h3>
             <p class="small">@if($membership->start_date && $membership->end_date){{ $membership->start_date->format('d/m/Y') }} &ndash; {{ $membership->end_date->format('d/m/Y') }}@else Dates assigned upon approval @endif &middot; Rp {{ number_format($membership->price, 2, ',', '.') }}</p>
+            @if($membership->quota_minutes)<p class="small">Sisa kuota studio: <strong>{{ number_format($membership->remaining_minutes / 60, 1, ',', '.') }} jam</strong> dari {{ $membership->quota_minutes / 60 }} jam.</p>@endif
             <p class="small"><strong>{{ $membership->effective_status === 'cancelled' ? 'Rejected / Cancelled' : (['pending' => 'Pending', 'active' => 'Active', 'expired' => 'Expired', 'cancelled' => 'Cancelled'][$membership->effective_status] ?? ucfirst($membership->effective_status)) }}</strong> &middot; {{ $membership->payment_status === 'paid' ? 'Paid' : 'Unpaid' }}</p>
         </article>
     @empty

@@ -35,7 +35,7 @@ class Payment extends Model
                 $parent = $payment->booking ?? $payment->classRegistration;
                 $payment->amount = round((float) ($parent->total_price ?? $parent->price) * ($payment->payment_type === 'dp' ? 0.5 : 1), 2);
             }
-            if ((float) $payment->amount <= 0) throw ValidationException::withMessages(['payment' => 'Nominal pembayaran harus lebih dari nol.']);
+            if ((float) $payment->amount < 0 || ((float) $payment->amount === 0 && !($payment->payment_method === 'membership' && $payment->verification_status === 'verified' && ($payment->booking ?? $payment->classRegistration)?->membership_id))) throw ValidationException::withMessages(['payment' => 'Nominal pembayaran harus lebih dari nol.']);
         });
     }
 

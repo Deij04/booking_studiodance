@@ -68,7 +68,31 @@
         <div class="classes-hero-copy"><span class="eyebrow">Orange Dance Academy</span><h1 id="classes-title">Find Your <span class="gold">Rhythm</span></h1><p>Discover dance classes for every stage of your journey. Explore new styles, develop your technique, and move with confidence.</p></div>
     </section>
     <div class="classes-content">
-        <form class="studio-search" action="{{ route('user.classes.index') }}" method="GET">
+        <p style="margin:24px 0;padding:16px 20px;border:1px solid #6d5c24;border-radius:16px;color:var(--gold);background:#25200f">Membership aktif? Daftar class gratis untuk jadwal dalam periode membership. Kursi tetap mengikuti kapasitas dan reservasi yang tersedia.</p>
+        <section aria-labelledby="class-catalog-title" style="margin:28px 0 48px">
+            <h2 id="class-catalog-title" style="margin:0 0 10px">Our <span class="gold">Dance Classes</span></h2>
+            <p class="sub" style="text-align:left;margin:0 0 24px">Explore the classes we offer, then choose an available session below.</p>
+            <div class="user-class-grid">
+                @forelse($catalog as $class)
+                    <article class="user-class-card">
+                        <div class="user-class-photo">
+                            @if($class->image)<img src="{{ asset('storage/'.$class->image) }}" alt="Photo of {{ $class->name }}" loading="lazy">@else<div class="class-no-image">Image unavailable</div>@endif
+                            <span class="user-class-level">{{ \App\Models\DanceClass::LEVELS[$class->level] ?? $class->level }}</span>
+                        </div>
+                        <div class="user-class-body">
+                            <h3 style="color:var(--gold);margin:0 0 10px">{{ $class->name }}</h3>
+                            @if($class->description)<p class="user-class-description">{{ __($class->description) }}</p>@endif
+                            <p class="user-class-info">IDR {{ number_format($class->price, 0, '.', ',') }} / session</p>
+                            <a class="user-class-join" style="text-align:center" href="{{ route('user.classes.reserve', ['danceClass' => $class]) }}">Book Class</a>
+                        </div>
+                    </article>
+                @empty<div class="class-empty">No dance classes are currently available. Please check back soon.</div>@endforelse
+            </div>
+        </section>
+        <section id="available-schedules" aria-labelledby="available-schedules-title" style="scroll-margin-top:110px">
+        <h2 id="available-schedules-title" style="margin:0 0 10px">Available <span class="gold">Class Schedules</span></h2>
+        <p class="sub" style="text-align:left;margin:0 0 24px">Choose your date, studio, and session. All times are in WITA.</p>
+        <form class="studio-search" action="{{ route('user.classes.index') }}#available-schedules" method="GET">
             @if(!empty($filters['class_id']))<input type="hidden" name="class_id" value="{{ $filters['class_id'] }}">@endif
             <div><label for="studio-date">Date</label><input id="studio-date" type="date" name="date" min="{{ today()->toDateString() }}" value="{{ old('date', $filters['date'] ?? '') }}"></div>
             <div>
@@ -86,7 +110,7 @@
                 </div>
             </div>
             <div><label for="studio-type">Studio Type</label><select id="studio-type" name="studio_id"><option value="">All Studios</option>@foreach($studioOptions as $studio)<option value="{{ $studio->id }}" @selected(old('studio_id', $filters['studio_id'] ?? '') == $studio->id)>{{ $studio->name }}</option>@endforeach</select></div>
-            <button class="studio-search-submit" type="submit" aria-label="Search studios"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg></button>
+            <button class="studio-search-submit" type="submit" aria-label="Search class schedules"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg></button>
             <a class="class-search-reset" href="{{ route('user.classes.index', array_filter(['class_id' => $filters['class_id'] ?? null])) }}">Reset</a>
         </form>
         @if($errors->any())<div class="studio-search-errors" role="alert">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
@@ -95,8 +119,9 @@
             @foreach($classOptions as $option)<a class="class-filter" href="{{ route('user.classes.index', array_merge($filters, ['class_id' => $option->id])) }}" @if(($filters['class_id'] ?? null) == $option->id) aria-current="true" @endif>{{ $option->name }}</a>@endforeach
         </nav>
         <div class="user-class-grid">
-            @forelse($classes as $class)
-                @php($next = $class->classSchedules->first(fn ($schedule) => $schedule->occupied < $schedule->capacity))
+            @forelse($availableSchedules as $item)
+                @php($class = $item['class'])
+                @php($next = $item['schedule'])
                 <article class="user-class-card">
                     <div class="user-class-photo">
                         @if($class->image)<img src="{{ asset('storage/'.$class->image) }}" alt="Photo of {{ $class->name }}" loading="lazy">@else<div class="class-no-image">Image unavailable</div>@endif
@@ -104,7 +129,7 @@
                     </div>
                     <div class="user-class-body">
                         <h2>{{ $class->name }}</h2>
-                        @if($next)<p class="class-availability">{{ max(0, $next->capacity - $next->occupied) }} spots left in the next session</p>@endif
+                        @if($next)<p class="class-availability">{{ max(0, $next->capacity - $next->occupied) }} spots left in this session</p>@endif
                         @if($class->description)<p class="user-class-description">{{ __($class->description) }}</p>@endif
                         <ul class="user-class-info">
                             <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6m10-6v6M3 11h18"/></svg>@if($next){{ \Illuminate\Support\Carbon::parse($next->date)->format('D, d M Y') }}, {{ substr($next->start_time, 0, 5) }}@else No available sessions yet @endif</li>
@@ -115,8 +140,9 @@
                     </div>
                 </article>
 
-            @empty<div class="class-empty">No dance classes are currently available. Please check back soon.</div>@endforelse
+            @empty<div class="class-empty">No available class schedules match your selection. Try another date or class.</div>@endforelse
         </div>
+        </section>
     </div>
     <section class="classes-why" aria-labelledby="classes-why-title">
         <h2 id="classes-why-title"><span>Why</span> Choose <span>Us?</span></h2>

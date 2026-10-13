@@ -1,11 +1,19 @@
 <!doctype html>
-<html lang="id">
+<html lang="id" class="admin-dashboard">
 <head>
     <meta charset="utf-8">
     <link rel="icon" type="image/png" href="{{ asset('images/logoorange.png') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', 'Dashboard') | Orange Dance Academy</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>
+        .admin-dashboard,.admin-dashboard *{scrollbar-color:#f2c83f #1b1b17;scrollbar-width:thin}
+        .admin-dashboard::-webkit-scrollbar,.admin-dashboard *::-webkit-scrollbar{width:10px;height:10px}
+        .admin-dashboard::-webkit-scrollbar-track,.admin-dashboard *::-webkit-scrollbar-track{background:#1b1b17;border-radius:10px}
+        .admin-dashboard::-webkit-scrollbar-thumb,.admin-dashboard *::-webkit-scrollbar-thumb{background:#f2c83f;border:2px solid #1b1b17;border-radius:10px}
+        .admin-dashboard::-webkit-scrollbar-thumb:hover,.admin-dashboard *::-webkit-scrollbar-thumb:hover{background:#ffda58}
+        .admin-dashboard::-webkit-scrollbar-corner,.admin-dashboard *::-webkit-scrollbar-corner{background:#1b1b17}
+    </style>
     @stack('styles')
 </head>
 <body class="min-h-screen bg-[#0d0d0d] font-sans text-white antialiased">

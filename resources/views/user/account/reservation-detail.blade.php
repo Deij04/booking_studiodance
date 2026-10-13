@@ -24,9 +24,9 @@
     <section class="history-detail-card"><h2>Pembayaran</h2><p>Status pembayaran: <strong>{{ $summary['label'] }}</strong></p>
         <div class="payment-totals"><span>Total<strong>Rp {{ number_format($summary['total'], 2, ',', '.') }}</strong></span><span>Pembayaran terverifikasi<strong>Rp {{ number_format($summary['paid'], 2, ',', '.') }}</strong></span><span>Sisa pembayaran<strong>Rp {{ number_format($summary['remaining'], 2, ',', '.') }}</strong></span></div>
         <div class="history-payment-table"><table><thead><tr><th>Tahap pembayaran</th><th>Nominal</th><th>Metode</th><th>Status pembayaran</th></tr></thead><tbody>
-            <tr><td>{{ $summary['dp'] ? 'DP (50%)' : 'Pembayaran penuh' }}</td><td>Rp {{ number_format($summary['firstAmount'], 2, ',', '.') }}</td><td>{{ \App\Models\Booking::PAYMENT_METHODS[$summary['initial']?->payment_method] ?? '-' }}</td><td>{{ $summary['verified'] ? 'Terverifikasi' : (($type === 'class' && $record->payment?->verification_status === 'rejected') ? 'Belum Terverifikasi' : 'Menunggu Verifikasi') }}</td></tr>
+            <tr><td>{{ $record->membership_id ? 'Benefit Membership' : ($summary['dp'] ? 'DP (50%)' : 'Pembayaran penuh') }}</td><td>Rp {{ number_format($summary['firstAmount'], 2, ',', '.') }}</td><td>{{ \App\Models\Booking::PAYMENT_METHODS[$summary['initial']?->payment_method] ?? '-' }}</td><td>{{ $summary['verified'] ? 'Terverifikasi' : (($type === 'class' && $record->payment?->verification_status === 'rejected') ? 'Belum Terverifikasi' : 'Menunggu Verifikasi') }}</td></tr>
             @if($type === 'class')
-                @if(!$summary['settlement'] && ($summary['dp'] || $summary['remaining'] > 0))
+                @if(!$summary['settlement'] && $summary['verified'] && $summary['remaining'] > 0 && $summary['total'] > $summary['firstAmount'])
                     <tr><td>Pelunasan</td><td>Rp {{ number_format($summary['remaining'], 2, ',', '.') }}</td><td>-</td><td>Belum diajukan</td></tr>
                 @endif
                 @foreach($record->settlements()->orderBy('id')->get() as $classSettlement)
