@@ -60,6 +60,24 @@ class BookingController extends Controller
         return view('admin.bookings.index', compact('bookings', 'filters', 'tab', 'tabs', 'tabCounts'));
     }
 
+    public function destroy(Request $request, Booking $booking)
+    {
+        abort_unless($request->user()->role === 'super_admin', 403);
+        $proofs = DB::transaction(function () use ($booking) {
+            $booking->studio()->lockForUpdate()->firstOrFail();
+            $record = Booking::lockForUpdate()->findOrFail($booking->id);
+            $proofs = $record->payments()->pluck('payment_proof')->filter()->all();
+            $record->delete();
+            return $proofs;
+        });
+        foreach ($proofs as $proof) {
+            if (!str_contains($proof, '..') && preg_match('#^(booking-payment-proofs|payment-proofs|class-payment-proofs|settlement-proofs)/#', $proof)) {
+                Storage::disk('local')->delete($proof);
+            }
+        }
+        return to_route('admin.bookings.index')->with('success', 'Booking studio berhasil dihapus.');
+    }
+
     public function create(): View|RedirectResponse
     {
         return view('admin.bookings.create', [
@@ -98,6 +116,7 @@ class BookingController extends Controller
             abort_unless($request->user()->role === 'customer' && $request->user()->status === 'active', 403);
             $request->merge(['user_id' => $request->user()->id, 'payment_status' => 'unpaid', 'booking_name' => $request->user()->name]);
         }
+        $usingMembership = $request->input('payment_method') === 'membership';
         $data = $request->validate([
             'user_id' => ['required', 'integer', Rule::exists('users', 'id')->where('role', 'customer')->where('status', 'active')],
             'studio_id' => ['required', 'integer', Rule::exists('studios', 'id')->where('status', 'active')],
@@ -105,7 +124,7 @@ class BookingController extends Controller
             'start_time' => ['required', 'date_format:H:i', new \App\Rules\HalfHour],
             'end_time' => ['required', 'date_format:H:i', new \App\Rules\HalfHour, 'after:start_time'],
             'purpose' => ['nullable', Rule::in(Booking::PURPOSES)],
-            'payment_proof' => [$customer ? 'required' : 'nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
+            'payment_proof' => [$customer && !$usingMembership ? 'required' : 'nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
             'payment_status' => ['required', Rule::in(array_keys(Booking::PAYMENT_STATUSES))],
             'payment_method' => ['nullable', Rule::in(array_keys(Booking::PAYMENT_METHODS))],
             'payment_type' => ['nullable', Rule::in(array_keys(Booking::PAYMENT_TYPES))],
@@ -113,7 +132,7 @@ class BookingController extends Controller
         ]);
         if ($customer) {
             $details = $request->validate([
-                'payment_method' => ['required', Rule::in(array_keys(Booking::ONLINE_PAYMENT_METHODS))],
+                'payment_method' => ['required', Rule::in(array_merge(array_keys(Booking::ONLINE_PAYMENT_METHODS), ['membership']))],
                 'booking_name' => ['required', 'string', 'max:255'],
                 'purpose' => ['required', Rule::in(Booking::PURPOSES)],
             ]);
@@ -136,24 +155,34 @@ class BookingController extends Controller
             if (! in_array($data['end_time'], $available[$data['date']][$data['start_time']] ?? [], true)) {
                 throw ValidationException::withMessages(['start_time' => 'Jam yang dipilih sudah terisi atau di luar jam operasional. Pilih ulang tanggal dan jam.']);
             }
+            $membership = null;
+            $membershipMinutes = (int) $start->diffInMinutes($end);
+            if (($data['payment_method'] ?? null) === 'membership') {
+                $membership = \App\Models\Membership::where('user_id', $data['user_id'])->validOn($data['date'])->where('quota_minutes', '>', 0)
+                    ->where(fn ($query) => $query->whereNull('studio_id')->orWhere('studio_id', $studio->id))->lockForUpdate()->first();
+                if (!$membership || $membership->remaining_minutes < $membershipMinutes) throw ValidationException::withMessages(['payment_method' => 'Membership tidak berlaku untuk studio/tanggal ini atau sisa kuota tidak cukup.']);
+                $data['payment_type'] = 'full';
+            }
             $price = round((float) $studio->price_per_hour * $start->diffInMinutes($end) / 60, 2);
             if ($price > 9999999999.99) {
                 throw ValidationException::withMessages(['end_time' => 'Total biaya melebihi batas. Kurangi durasi booking.']);
             }
+            if ($membership) $price = 0;
             $booking = Booking::create([
                 'booking_code' => 'RES-'.now()->format('Ymd').'-'.Str::upper((string) Str::ulid()),
                 'user_id' => $data['user_id'], 'studio_id' => $studio->id,
                 'date' => $data['date'], 'start_time' => $data['start_time'], 'end_time' => $data['end_time'],
                 'purpose' => $data['purpose'] ?? null, 'notes' => $data['notes'] ?? null,
-                'total_price' => $price, 'status' => $customer ? 'pending' : 'confirmed',
+                'total_price' => $price, 'status' => $customer && !$membership ? 'pending' : 'confirmed',
+                'membership_id' => $membership?->id, 'membership_minutes' => $membership ? $membershipMinutes : 0,
                 'booking_name' => $data['booking_name'] ?? null,
             ]);
             $booking->payment()->create([
                 'payment_stage' => 'initial', 'amount' => round($price * (($data['payment_type'] ?? 'full') === 'dp' ? 0.5 : 1), 2),
                 'payment_proof' => $proof, 'payment_method' => $data['payment_method'] ?? 'cash',
-                'payment_type' => $data['payment_type'] ?? 'full', 'verification_status' => $customer ? 'pending' : 'verified',
+                'payment_type' => $data['payment_type'] ?? 'full', 'verification_status' => $customer && !$membership ? 'pending' : 'verified',
                 'verified_by' => $customer ? null : $request->user()->id,
-                'verified_by_name' => $customer ? null : $request->user()->name, 'verified_at' => $customer ? null : now(),
+                'verified_by_name' => $membership ? 'Otomatis - Benefit Membership' : ($customer ? null : $request->user()->name), 'verified_at' => $customer && !$membership ? null : now(),
             ]);
             $booking->unsetRelation('payment');
             $this->recordActivity($booking, 'created', []);
@@ -296,6 +325,12 @@ class BookingController extends Controller
             $days = app(BookingAvailability::class)->month($studio, substr($data['date'], 0, 7), $booking->id);
             if (!in_array($data['end_time'], $days[$data['date']][$data['start_time']] ?? [], true)) {
                 throw ValidationException::withMessages(['start_time' => 'Jadwal terisi, sudah lewat, atau durasi kurang dari satu jam. Pilih jadwal lain.']);
+            }
+            if ($booking->membership_id) {
+                $membership = \App\Models\Membership::whereKey($booking->membership_id)->validOn($data['date'])->lockForUpdate()->first();
+                $minutes = (int) Carbon::parse($data['date'].' '.$data['start_time'])->diffInMinutes(Carbon::parse($data['date'].' '.$data['end_time']));
+                if (!$membership || ($membership->studio_id && $membership->studio_id != $studio->id) || $membership->remaining_minutes + $booking->membership_minutes < $minutes) throw ValidationException::withMessages(['date' => 'Studio, tanggal, atau durasi tidak sesuai benefit dan sisa kuota membership.']);
+                $data['membership_minutes'] = $minutes;
             }
             $oldSchedule = $booking->only(['studio_id', 'date', 'start_time', 'end_time']);
             $booking->update($data);

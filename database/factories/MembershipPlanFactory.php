@@ -15,7 +15,7 @@ class MembershipPlanFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->unique()->randomElement(['Basic', 'Premium', 'VIP', 'Student']),
+            'name' => fake()->randomElement(['Basic', 'Premium', 'VIP', 'Student']).' '.fake()->unique()->numerify('########'),
             'price' => fake()->numberBetween(100000, 600000),
             'duration_days' => fake()->randomElement([30, 60, 90, 180]),
             'description' => fake()->sentence(),

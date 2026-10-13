@@ -34,9 +34,11 @@ class UserClassPageTest extends TestCase
         DanceClass::factory()->create(['status' => 'active']);
         $this->get(route('user.classes.index', ['class_id' => $first->id]))->assertOk()
             ->assertViewHas('classes', fn ($classes) => $classes->count() === 1 && $classes->first()->id === $first->id)
-            ->assertSee('No Available Sessions');
+            ->assertViewHas('catalog', fn ($catalog) => $catalog->count() === 2)
+            ->assertSee('No available class schedules match your selection.');
         $this->get(route('user.classes.index', ['class_id' => 999999]))->assertOk()
-            ->assertSee('No dance classes are currently available.');
+            ->assertViewHas('catalog', fn ($catalog) => $catalog->count() === 2)
+            ->assertSee('No available class schedules match your selection.');
     }
     public function test_schedule_search_filters_class_sessions_and_studio_page_has_no_search_form(): void
     {

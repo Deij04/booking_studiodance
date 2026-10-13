@@ -106,6 +106,9 @@
             </a>
             <div class="login-content">
                 <h1 id="login-title">LOGIN</h1>
+                @if (session('status'))
+                    <p role="status" style="color:var(--gold)">{{ session('status') }}</p>
+                @endif
                 <form method="POST" action="{{ route('login.store') }}">
                     @csrf
                     @if ($errors->any())
@@ -124,7 +127,7 @@
                             </button>
                         </div>
                     </div>
-                    <div class="forgot"><a href="#">Forgot Password</a></div>
+                    <div class="forgot"><a href="{{ route('password.request') }}">Forgot Password</a></div>
                     <button class="submit-button" type="submit">Login</button>
                     <p class="register">Don't have an account? <a href="{{ route('register') }}">Register</a></p>
                 </form>

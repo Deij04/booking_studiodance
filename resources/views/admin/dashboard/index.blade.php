@@ -12,6 +12,17 @@
         </div>
     </section>
 
+    @if(auth()->user()->role === 'super_admin')
+    <section class="mt-6 rounded-2xl border border-white/10 bg-[#171717] p-5">
+        <h3 class="font-semibold text-[#f2c83f]">Laporan Reservasi</h3>
+        <p class="mt-2 text-xs text-white/50">CSV berisi booking studio, reservasi class, membership, dan pembayaran. Filter studio/class memakai tanggal penggunaan; membership memakai tanggal pendaftaran. Kosongkan untuk seluruh data.</p>
+        <form method="GET" action="{{ route('admin.reports.download') }}" class="mt-4 flex flex-wrap items-end gap-3">
+            <div><label for="report-from" class="text-xs text-white/60">Dari tanggal</label><input id="report-from" name="from" type="date" class="mt-2 block rounded-lg border border-white/15 bg-[#0d0d0d] px-3 py-2 text-sm [color-scheme:dark]"></div>
+            <div><label for="report-to" class="text-xs text-white/60">Sampai tanggal</label><input id="report-to" name="to" type="date" class="mt-2 block rounded-lg border border-white/15 bg-[#0d0d0d] px-3 py-2 text-sm [color-scheme:dark]"></div>
+            <button type="submit" class="rounded-lg bg-[#f2c83f] px-4 py-2 text-sm font-semibold text-black">Unduh Laporan CSV</button>
+        </form>
+    </section>
+    @endif
     <section class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <article class="rounded-2xl border border-white/10 bg-[#171717] p-5"><p class="text-sm text-white/50">Total Booking</p><p class="mt-4 text-3xl font-bold">{{ $reservationCount }}</p><p class="mt-2 text-xs text-white/40">Seluruh booking pelanggan</p></article>
         @foreach(['requests' => ['Pengajuan Booking', $pendingCount, 'Perlu ditinjau'], 'active' => ['Booking Aktif', $confirmedCount, 'Sudah dikonfirmasi'], 'history' => ['Riwayat Booking', $historyCount, 'Selesai atau dibatalkan']] as $tab => [$label, $count, $description])

@@ -23,6 +23,7 @@ class BookingController extends AdminBookingController
         return view('user.bookings.create', [
             'studio' => $studio,
             'hours' => app(\App\Services\BookingHours::class)->current(),
+            'studioMembership' => auth()->user()->memberships()->validOn(today()->toDateString())->where('quota_minutes', '>', 0)->where(fn ($query) => $query->whereNull('studio_id')->orWhere('studio_id', $studio->id))->first(),
         ]);
     }
 

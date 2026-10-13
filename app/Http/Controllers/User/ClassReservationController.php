@@ -26,44 +26,59 @@ class ClassReservationController extends Controller
                 ->orWhere(fn ($query) => $query->where('date', today()->toDateString())->where('start_time', '>', now()->format('H:i:s'))))
             ->with('studio')->withCount(['classRegistrations as occupied' => fn ($query) => $query->where('registration_status', '!=', 'cancelled')])
             ->orderBy('date')->orderBy('start_time')->get();
-        $registeredIds = $request->user()->classRegistrations()->where('registration_status', '!=', 'cancelled')->pluck('class_schedule_id')->all();
+        $alreadyRegistered = $request->user()->classRegistrations()
+            ->whereIn('registration_status', ['pending', 'confirmed'])
+            ->whereHas('classSchedule', fn ($query) => $query->where('dance_class_id', $danceClass->id))->exists();
+        $registeredIds = $alreadyRegistered ? $schedules->pluck('id')->all() : [];
 
-        return view('user.classes.reservation', compact('danceClass', 'schedules', 'registeredIds'));
+        $classMembership = $request->user()->memberships()->validOn(today()->toDateString())->where('free_classes', true)->first();
+        return view('user.classes.reservation', compact('danceClass', 'schedules', 'registeredIds', 'alreadyRegistered', 'classMembership'));
     }
 
     public function store(Request $request, DanceClass $danceClass)
     {
         $this->authorizeCustomer($request);
+        $requestedSchedule = $danceClass->classSchedules()->find($request->input('class_schedule_id'));
+        $membershipBenefit = $requestedSchedule && $request->user()->memberships()->validOn($requestedSchedule->date)->where('free_classes', true)->exists();
         $data = $request->validate([
             'class_schedule_id' => ['required', 'integer', Rule::exists('class_schedules', 'id')->where('dance_class_id', $danceClass->id)],
-            'payment_method' => ['required', Rule::in(array_keys(Booking::ONLINE_PAYMENT_METHODS))],
+            'payment_method' => [$membershipBenefit ? 'nullable' : 'required', Rule::in(array_keys(Booking::ONLINE_PAYMENT_METHODS))],
             'payment_type' => ['required', Rule::in(['full'])],
-            'payment_proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
+            'payment_proof' => [$membershipBenefit ? 'nullable' : 'required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:2048'],
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
         $proof = $request->file('payment_proof')?->store('class-payment-proofs', 'local');
         abort_if($proof === false, 500, 'Bukti pembayaran gagal disimpan.');
         try {
             DB::transaction(function () use ($request, $danceClass, $data, $proof) {
+                \App\Models\User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
                 $schedule = ClassSchedule::where('dance_class_id', $danceClass->id)->lockForUpdate()->findOrFail($data['class_schedule_id']);
                 $schedule->load(['danceClass', 'studio']);
+                $membership = $request->user()->memberships()->validOn($schedule->date)->where('free_classes', true)->lockForUpdate()->first();
+                if (!$membership && empty($proof)) throw ValidationException::withMessages(['payment_proof' => 'Membership tidak berlaku pada tanggal sesi ini. Silakan kirim bukti pembayaran.']);
                 if ($schedule->status !== 'active' || $schedule->danceClass->status !== 'active' || $schedule->studio->status !== 'active'
                     || Carbon::parse($schedule->date.' '.$schedule->start_time)->lte(now())) {
                     throw ValidationException::withMessages(['class_schedule_id' => 'Sesi kelas sudah dimulai atau tidak tersedia.']);
                 }
-                if ($schedule->classRegistrations()->where('user_id', $request->user()->id)->where('registration_status', '!=', 'cancelled')->exists()) {
-                    throw ValidationException::withMessages(['class_schedule_id' => 'Anda sudah mendaftar sesi ini.']);
+                if ($request->user()->classRegistrations()->whereIn('registration_status', ['pending', 'confirmed'])
+                    ->whereHas('classSchedule', fn ($query) => $query->where('dance_class_id', $danceClass->id))->exists()) {
+                    throw ValidationException::withMessages(['class_schedule_id' => 'Anda sudah memiliki reservasi pada class ini yang menunggu atau dikonfirmasi. Tidak dapat mendaftar lagi pada jadwal lain.']);
                 }
                 if ($schedule->classRegistrations()->where('registration_status', '!=', 'cancelled')->count() >= $schedule->capacity) {
                     throw ValidationException::withMessages(['class_schedule_id' => 'Kuota sesi kelas sudah penuh. Pilih sesi lain.']);
                 }
                 $registration = ClassRegistration::create([
                     'user_id' => $request->user()->id, 'class_schedule_id' => $schedule->id,
-                    'registration_date' => today(), 'price' => $schedule->danceClass->price,
-                    'registration_status' => 'pending',
+                    'registration_date' => today(), 'price' => $membership ? 0 : $schedule->danceClass->price,
+                    'membership_id' => $membership?->id,
+                    'registration_status' => $membership ? 'confirmed' : 'pending',
                 ]);
                 $registration->payment()->create([
-                    'payment_method' => $data['payment_method'], 'payment_type' => 'full',
+                    'payment_method' => $membership ? 'membership' : $data['payment_method'], 'payment_type' => 'full',
+                    'amount' => $membership ? 0 : $schedule->danceClass->price,
+                    'verification_status' => $membership ? 'verified' : 'pending',
+                    'verified_at' => $membership ? now() : null,
+                    'verified_by_name' => $membership ? 'Otomatis - Benefit Membership' : null,
                     'payment_proof' => $proof, 'notes' => $data['notes'] ?? null,
                 ]);
             });
@@ -72,7 +87,7 @@ class ClassReservationController extends Controller
             throw $exception;
         }
 
-        return to_route('user.history')->with('success', 'Reservasi kelas berhasil diajukan. Tunggu verifikasi pembayaran dan konfirmasi admin.');
+        return to_route('user.history')->with('success', 'Reservasi class berhasil disimpan. Benefit membership yang berlaku otomatis dikonfirmasi; pembayaran reguler menunggu verifikasi admin.');
     }
 
     private function authorizeCustomer(Request $request): void

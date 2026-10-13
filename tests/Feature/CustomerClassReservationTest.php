@@ -32,6 +32,22 @@ class CustomerClassReservationTest extends TestCase
         return ['payment_proof' => UploadedFile::fake()->create('proof.pdf', 12, 'application/pdf'), 'class_schedule_id' => $schedule->id, 'payment_method' => 'qris', 'payment_type' => 'full', 'notes' => 'First session'];
     }
 
+    public function test_customer_cannot_register_for_another_schedule_of_the_same_active_class(): void
+    {
+        Storage::fake('local');
+        $first = $this->makeSchedule();
+        $second = $this->makeSchedule(['dance_class_id' => $first->dance_class_id, 'date' => today()->addDays(3)->toDateString()]);
+        $customer = User::factory()->create();
+        $this->actingAs($customer)->postJson(route('user.classes.store', $first->danceClass), $this->data($first))->assertRedirect();
+        $this->postJson(route('user.classes.store', $second->danceClass), $this->data($second))
+            ->assertUnprocessable()->assertJsonValidationErrors('class_schedule_id');
+        $this->assertDatabaseCount('class_registrations', 1);
+        $this->get(route('user.classes.reserve', $first->danceClass))->assertOk()->assertViewHas('alreadyRegistered', true);
+        ClassRegistration::sole()->update(['registration_status' => 'cancelled']);
+        $this->postJson(route('user.classes.store', $second->danceClass), $this->data($second))->assertRedirect();
+        $this->assertDatabaseCount('class_registrations', 2);
+    }
+
     public function test_class_requires_full_payment_and_rejects_dp(): void
     {
         Storage::fake('local');

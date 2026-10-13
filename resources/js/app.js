@@ -133,3 +133,125 @@ document.addEventListener('submit', async event => {
         pendingSaves.delete(form);
     }
 });
+
+const approvedVerifications = new WeakSet();
+const pendingVerifications = new WeakSet();
+document.addEventListener('submit', async event => {
+    const form = event.target;
+    if (form.querySelector('[name="decision"]')?.value !== 'verified' || event.defaultPrevented) return;
+    if (approvedVerifications.has(form)) {
+        approvedVerifications.delete(form);
+        return;
+    }
+    event.preventDefault();
+    if (pendingVerifications.has(form)) return;
+    pendingVerifications.add(form);
+    const button = event.submitter;
+    try {
+        const result = await bookingAlert.fire({
+            title: 'Verifikasi pembayaran?',
+            text: 'Pastikan bukti dan nominal pembayaran sudah benar. Verifikasi akan dicatat atas nama Anda.',
+            icon: 'warning', showCancelButton: true,
+            confirmButtonText: 'Ya, Verifikasi', cancelButtonText: 'Periksa Kembali',
+            focusCancel: true,
+        });
+        if (result.isConfirmed) {
+            approvedVerifications.add(form);
+            if (button) form.requestSubmit(button); else form.requestSubmit();
+            approvedVerifications.delete(form);
+        }
+    } finally {
+        pendingVerifications.delete(form);
+    }
+});
+
+document.querySelectorAll('[data-class-deactivate]').forEach(form => {
+    let approved = false;
+    let busy = false;
+    form.addEventListener('submit', async event => {
+        if (approved) return;
+        event.preventDefault();
+        if (busy) return;
+        busy = true;
+        const button = event.submitter;
+        try {
+            const result = await bookingAlert.fire({
+                title: 'Nonaktifkan jadwal class?',
+                text: 'Jadwal tidak lagi menerima reservasi dan jam studio tersedia kembali jika tidak ada booking atau blokir lain. Riwayat peserta tetap tersimpan. Jadwal tidak dapat dinonaktifkan jika masih ada reservasi menunggu atau terkonfirmasi.',
+                icon: 'warning', showCancelButton: true,
+                confirmButtonText: 'Ya, Nonaktifkan', cancelButtonText: 'Batal',
+                confirmButtonColor: '#dc2626', focusCancel: true,
+            });
+            if (result.isConfirmed) {
+                approved = true;
+                if (button) form.requestSubmit(button); else form.requestSubmit();
+            }
+        } finally {
+            busy = false;
+        }
+    });
+});
+
+document.querySelectorAll('[data-owner-delete]').forEach(form => {
+    let approved = false;
+    let busy = false;
+    form.addEventListener('submit', async event => {
+        if (approved) return;
+        event.preventDefault();
+        if (busy) return;
+        busy = true;
+        try {
+            const result = await bookingAlert.fire({
+                title: 'Hapus reservasi secara permanen?',
+                text: 'Reservasi, pembayaran, dan bukti bayar akan dihapus. Pendapatan terkait juga akan berkurang. Jadwal atau kursi tersedia kembali. Data tidak dapat dikembalikan.',
+                icon: 'warning', showCancelButton: true,
+                confirmButtonText: 'Ya, Hapus', cancelButtonText: 'Batal',
+                confirmButtonColor: '#dc2626', focusCancel: true,
+            });
+            if (result.isConfirmed) { approved = true; form.requestSubmit(); }
+        } finally { busy = false; }
+    });
+});
+
+document.querySelectorAll('[data-membership-decision]').forEach(form => {
+    let approved = false;
+    let busy = false;
+    form.addEventListener('submit', async event => {
+        if (approved) return;
+        event.preventDefault();
+        if (busy) return;
+        busy = true;
+        const accepting = form.elements.decision.value === 'approve';
+        try {
+            const result = await bookingAlert.fire({
+                title: accepting ? 'Verifikasi dan aktifkan membership?' : 'Tolak pengajuan membership?',
+                text: accepting ? 'Pastikan pembayaran sudah diperiksa dan lunas sebelum mengaktifkan membership.' : 'Pengajuan akan ditolak. Customer dapat mengajukan membership kembali.',
+                icon: 'warning', showCancelButton: true,
+                confirmButtonText: accepting ? 'Ya, Verifikasi' : 'Ya, Tolak', cancelButtonText: 'Batal',
+                confirmButtonColor: accepting ? '#a88719' : '#dc2626', focusCancel: true,
+            });
+            if (result.isConfirmed) { approved = true; form.requestSubmit(); }
+        } finally { busy = false; }
+    });
+});
+
+document.querySelectorAll('[data-plan-delete]').forEach(form => {
+    let approved = false;
+    let busy = false;
+    form.addEventListener('submit', async event => {
+        if (approved) return;
+        event.preventDefault();
+        if (busy) return;
+        busy = true;
+        try {
+            const result = await bookingAlert.fire({
+                title: 'Hapus paket membership?',
+                text: 'Paket tanpa member ini akan dihapus dan tidak bisa dipilih untuk pendaftaran baru.',
+                icon: 'warning', showCancelButton: true,
+                confirmButtonText: 'Ya, Hapus Paket', cancelButtonText: 'Batal',
+                confirmButtonColor: '#dc2626', focusCancel: true,
+            });
+            if (result.isConfirmed) { approved = true; form.requestSubmit(); }
+        } finally { busy = false; }
+    });
+});

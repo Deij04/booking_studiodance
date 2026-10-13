@@ -52,6 +52,9 @@
                             <td class="whitespace-nowrap px-5 py-4"><span class="rounded-full px-3 py-1 text-xs {{ ['pending' => 'bg-amber-400/10 text-amber-300', 'confirmed' => 'bg-blue-400/10 text-blue-300', 'cancelled' => 'bg-red-400/10 text-red-300', 'completed' => 'bg-emerald-400/10 text-emerald-300'][$booking->status] }}">{{ \App\Models\Booking::STATUSES[$booking->status] }}</span></td>
                             <td class="px-5 py-4">
                                 <div class="flex items-center gap-3">
+                                    @if(auth()->user()->role === 'super_admin')
+                                        <form data-owner-delete method="POST" action="{{ route('admin.bookings.destroy', $booking) }}">@csrf @method('DELETE')<button type="submit" class="text-xs text-red-300 hover:underline">Hapus</button></form>
+                                    @endif
                                     <a href="{{ route('admin.bookings.show', $booking) }}" aria-label="Detail booking {{ $booking->booking_code }}" class="text-[#f2c83f] hover:underline">Detail</a>
                                     @if($tab === 'active' && $booking->status === 'confirmed')
                                     <a href="{{ route('admin.bookings.edit', $booking) }}" aria-label="Edit booking {{ $booking->booking_code }}" class="text-sm text-white/60 hover:underline">Edit</a>

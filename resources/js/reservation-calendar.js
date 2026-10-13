@@ -63,7 +63,7 @@ if (form) {
             find('#info-time').textContent = `Time: ${clock(start.value)} - ${clock(end.value)}`;
             find('#info-duration').textContent = `Duration: ${hours.value} ${Number(hours.value) === 1 ? 'hour' : 'hours'}`;
             find('#reservation-summary').textContent = `${studio.dataset.name} | ${formattedDate} | ${start.value} - ${end.value}`;
-            find('#reservation-price').textContent = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(Number(studio.dataset.price) * duration() / 60);
+            find('#reservation-price').textContent = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(find('#payment_method').value === 'membership' ? 0 : Number(studio.dataset.price) * duration() / 60);
         }
     }
     function renderTimes() {
@@ -152,14 +152,28 @@ if (form) {
     for (const [selector, amount] of [['[data-duration-up]', step], ['[data-duration-down]', -step]]) find(selector).addEventListener('click', () => { hours.value = Math.max(minimum, (Number.isFinite(duration()) ? duration() : minimum) + amount) / 60; renderTimes(); });
     next.addEventListener('click', () => { sync(); if (next.disabled) return; showStep('details'); heading.scrollIntoView({ behavior: 'smooth', block: 'start' }); find('#booking_name').focus({ preventScroll: true }); });
     find('[data-back]').addEventListener('click', () => { showStep('schedule'); next.focus(); });
+    const memberBooking = () => find('#payment_method').value === 'membership';
+    const syncMembership = () => {
+        const option = find('#payment_method').querySelector('[value="membership"]');
+        if (option) option.disabled = !date.value || date.value < form.dataset.memberStart || date.value > form.dataset.memberEnd || duration() > Number(form.dataset.memberMinutes);
+        if (option?.disabled && memberBooking()) find('#payment_method').value = '';
+        const member = memberBooking();
+        find('#payment_type').disabled = member;
+        if (member) find('#payment_type').value = 'full';
+        // Disabled controls are omitted on submission; server sets full for membership.
+        find('#payment_proof').required = !member;
+        find('#payment_proof').closest('.payment-upload').hidden = member;
+    };
+    find('#payment_method').addEventListener('change', syncMembership);
     function renderPayment() {
+        syncMembership();
         find('#payment-type-summary').textContent = find('#payment_type').selectedOptions[0].textContent;
         const method = find('#payment_method');
         find('#payment-method-summary').textContent = method.selectedOptions[0].textContent;
         const money = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(studio.dataset.price) * duration() / 60);
         find('#payment-studio-total').textContent = money;
         find('#payment-rental-total').textContent = money;
-        const total = Number(studio.dataset.price) * duration() / 60;
+        const total = memberBooking() ? 0 : Number(studio.dataset.price) * duration() / 60;
         const due = Math.round(total * (find('#payment_type').value === 'dp' ? 0.5 : 1) * 100) / 100;
         const currency = value => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 2 }).format(value);
         find('#payment-due-label').textContent = find('#payment_type').value === 'dp' ? 'Bayar DP (50%)' : 'Bayar Lunas';
@@ -169,6 +183,7 @@ if (form) {
         find('#payment-date').textContent = new Date(`${date.value}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
         find('#payment-time').textContent = `${start.value} - ${end.value} (${hours.value}h)`;
         const image = find('#payment-method-image');
+        if (memberBooking()) { find('#payment-due-label').textContent = `Kuota dipakai: ${hours.value} jam`; find('#payment-studio-total').textContent = currency(0); find('#payment-rental-total').textContent = currency(0); find('#reservation-price').textContent = currency(0); }
         find('[data-qris-panel]').hidden = method.value !== 'qris';
         find('[data-bank-panel]').hidden = method.value !== 'bank_transfer';
         image.src = image.dataset.qrisSrc;
@@ -181,6 +196,7 @@ if (form) {
     }
     find('[data-details-next]').addEventListener('click', () => {
         sync(); if (next.disabled) { showStep('schedule'); return; }
+        syncMembership();
         for (const input of details.querySelectorAll('input, select, textarea')) if (!input.reportValidity()) return;
         renderPayment();
         showStep('payment'); find('#payment-title').focus(); heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -200,7 +216,7 @@ if (form) {
         sync();
         if (submit.disabled) { showErrors(['Jadwal tidak tersedia. Gunakan Back untuk memilih ulang jadwal.']); return; }
         const proof = find('#payment_proof').files[0];
-        if (!proof) { showErrors(['Bukti pembayaran wajib diunggah.']); return; }
+        if (!proof && !memberBooking()) { showErrors(['Bukti pembayaran wajib diunggah.']); return; }
         if (proof && proof.size > 2048 * 1024) {
             showErrors(['Ukuran bukti pembayaran maksimal 2 MB. Pilih file yang lebih kecil.']);
             return;

@@ -3,7 +3,7 @@
 @section('content')
 <main class="reservation-page">
     <header class="reservation-heading"><h1>Availability Calendar</h1><p>Real-time scheduling across all studio spaces.</p></header>
-    <form data-reservation-calendar data-resume-payment="{{ $errors->any() && old('date') ? '1' : '0' }}" data-url="{{ url('bookings/availability') }}" data-today="{{ today()->toDateString() }}" data-minimum="{{ config('booking.minimum_minutes') }}" data-step="{{ config('booking.step_minutes') }}" action="{{ route('user.bookings.store') }}" method="POST" enctype="multipart/form-data">
+    <form data-reservation-calendar data-resume-payment="{{ $errors->any() && old('date') ? '1' : '0' }}" data-url="{{ url('bookings/availability') }}" data-today="{{ today()->toDateString() }}" data-member-start="{{ $studioMembership?->start_date?->toDateString() }}" data-member-end="{{ $studioMembership?->end_date?->toDateString() }}" data-member-minutes="{{ $studioMembership?->remaining_minutes ?? 0 }}" data-minimum="{{ config('booking.minimum_minutes') }}" data-step="{{ config('booking.step_minutes') }}" action="{{ route('user.bookings.store') }}" method="POST" enctype="multipart/form-data">
         @csrf
         <div class="reservation-errors" data-reservation-errors role="alert" tabindex="-1" @if(!$errors->any()) hidden @endif>@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>
         <div class="reservation-studio" data-schedule-studio><span>{{ $studio->name }}</span><span>Rp {{ number_format($studio->price_per_hour, 0, ',', '.') }}/hour</span></div>
@@ -33,7 +33,8 @@
                 <div class="booking-detail-form">
                     <label for="booking_name">Booking Name</label><input id="booking_name" name="booking_name" value="{{ auth()->user()->name }}" maxlength="255" readonly aria-readonly="true">
                     <label for="purpose">Session Type</label><select id="purpose" name="purpose" required><option value="">Choose session type</option>@foreach(\App\Models\Booking::PURPOSES as $type)<option value="{{ $type }}" @selected(old('purpose') === $type)>{{ $type }}</option>@endforeach</select>
-                    <label for="payment_method">Metode Pembayaran</label><select id="payment_method" name="payment_method" required><option value="">Pilih metode pembayaran</option>@foreach(\App\Models\Booking::ONLINE_PAYMENT_METHODS as $value => $label)<option value="{{ $value }}" @selected(old('payment_method') === $value)>{{ $label }}</option>@endforeach</select>
+                    @if($studioMembership)<p class="duration-help">Sisa kuota membership: {{ number_format($studioMembership->remaining_minutes / 60, 1, ',', '.') }} jam. Gunakan Benefit Membership untuk memakai kuota.</p>@endif
+                    <label for="payment_method">Metode Pembayaran</label><select id="payment_method" name="payment_method" required><option value="">Pilih metode pembayaran</option>@foreach(\App\Models\Booking::ONLINE_PAYMENT_METHODS as $value => $label)<option value="{{ $value }}" @selected(old('payment_method') === $value)>{{ $label }}</option>@endforeach @if($studioMembership)<option value="membership">Benefit Membership (kuota sewa)</option>@endif</select>
                     <label for="payment_type">Jenis Pembayaran</label><select id="payment_type" name="payment_type" required>@foreach(\App\Models\Booking::PAYMENT_TYPES as $value => $label)<option value="{{ $value }}" @selected(old('payment_type', 'full') === $value)>{{ $label }}</option>@endforeach</select>
                     <label for="notes">Note</label><textarea id="notes" name="notes" rows="6" maxlength="5000" placeholder="Add a note for your session">{{ old('notes') }}</textarea>
                 </div>

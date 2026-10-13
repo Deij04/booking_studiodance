@@ -15,6 +15,19 @@ class ClassVerificationTransferTest extends TestCase {
         $record->payment()->updateOrCreate([], ['payment_type' => 'full', 'payment_method' => 'qris', 'payment_proof' => 'class-payment-proofs/proof.pdf']);
         return $record;
     }
+    public function test_admin_class_reservation_saves_full_payment_method_and_proof(): void {
+        Storage::fake('local');
+        $schedule = $this->record()->classSchedule;
+        $customer = User::factory()->create();
+        $this->actingAs(User::factory()->admin()->create());
+        $data = ['user_id' => $customer->id, 'class_schedule_id' => $schedule->id, 'payment_method' => 'bank_transfer', 'payment_type' => 'full'];
+        $this->postJson(route('admin.class-registrations.store'), $data)->assertUnprocessable()->assertJsonValidationErrors('payment_proof');
+        $this->post(route('admin.class-registrations.store'), $data + ['payment_proof' => UploadedFile::fake()->create('proof.pdf', 12, 'application/pdf')])->assertSessionHasNoErrors()->assertRedirect();
+        $record = ClassRegistration::where('user_id', $customer->id)->sole();
+        $this->assertSame('full', $record->payment->payment_type);
+        $this->assertSame('bank_transfer', $record->payment->payment_method);
+        Storage::disk('local')->assertExists($record->payment->payment_proof);
+    }
     public function test_verification_has_only_decisions_and_records_actual_admin(): void {
         $record = $this->record(); $admin = User::factory()->admin()->create(); $this->actingAs($admin);
         $this->get(route('admin.class-registrations.verify', $record))->assertOk()->assertSee('Verifikasi')->assertSee('Tolak')
@@ -23,7 +36,8 @@ class ClassVerificationTransferTest extends TestCase {
         $this->assertSame('paid', $record->fresh()->payment_status);
         $this->assertSame('confirmed', $record->fresh()->registration_status);
         $this->assertSame($admin->id, $record->payment->fresh()->verified_by);
-        $this->patch(route('admin.class-registrations.decide', $record), ['decision' => 'rejected', 'rejection_reason' => 'bad'])->assertForbidden();
+        $this->patch(route('admin.class-registrations.decide', $record), ['decision' => 'rejected', 'rejection_reason' => 'bad'])->assertSessionHasErrors('decision');
+        $this->get(route('admin.class-registrations.verify', $record))->assertRedirect(route('admin.class-registrations.show', $record));
         $this->put(route('admin.class-registrations.update', $record), ['payment_status' => 'unpaid', 'registration_status' => 'cancelled'])->assertSessionHasErrors(['payment_status', 'registration_status']);
         $this->assertSame('confirmed', $record->fresh()->registration_status);
     }

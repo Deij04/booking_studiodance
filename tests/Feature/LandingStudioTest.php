@@ -42,4 +42,24 @@ class LandingStudioTest extends TestCase
         $this->withoutVite();
         $this->get(route('landing'))->assertOk()->assertSee('No studios are currently available.');
     }
+
+    public function test_home_uses_live_availability_classes_and_destination_links(): void
+    {
+        $this->withoutVite();
+        $this->travelTo(\Carbon\Carbon::parse('2026-10-15 07:00:00'));
+        $studio = Studio::factory()->create();
+        $class = \App\Models\DanceClass::factory()->create(['name' => 'Afro Database', 'price' => 70000, 'status' => 'active']);
+        \App\Models\Booking::factory()->create([
+            'studio_id' => $studio->id, 'date' => '2026-10-15',
+            'start_time' => '08:00', 'end_time' => '22:00', 'status' => 'pending',
+        ]);
+
+        $this->get(route('landing'))->assertOk()
+            ->assertSee('No available studio slots today.')
+            ->assertSee('Afro Database')->assertSee('Rp 70.000')
+            ->assertSee(route('user.studios.index'), false)
+            ->assertSee(route('user.classes.index', ['class_id' => $class->id]), false)
+            ->assertSee(route('memberships.index'), false)
+            ->assertDontSee('Sample available slots.');
+    }
 }
