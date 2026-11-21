@@ -14,7 +14,7 @@ class MembershipPlanController extends Controller
 {
     public function create()
     {
-        return view('admin.memberships.plan-form', ['plan' => new MembershipPlan(['status' => 'active', 'free_classes' => true]), 'studios' => Studio::where('status', 'active')->orderBy('name')->get()]);
+        return view('admin.memberships.plan-form', ['plan' => new MembershipPlan(['status' => 'active', 'free_classes' => true, 'duration_days' => 30]), 'studios' => Studio::where('status', 'active')->orderBy('name')->get()]);
     }
 
     public function store(Request $request)
@@ -74,8 +74,9 @@ class MembershipPlanController extends Controller
     {
         return $request->validate([
             'studio_id' => ['nullable', 'exists:studios,id'],
-            'quota_hours' => ['nullable', 'integer', Rule::in([15, 30])],
+            'quota_hours' => ['nullable', 'integer', 'min:1', 'max:87840'],
             'free_classes' => ['sometimes', 'boolean'],
+            'class_quota' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'name' => ['required', 'string', 'max:255'],
             'price' => ['required', 'numeric', 'min:0', 'max:9999999999.99', 'decimal:0,2'],
             'duration_days' => ['required', 'integer', 'min:1', 'max:3650'],

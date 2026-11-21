@@ -13,7 +13,7 @@ class AccountController extends Controller
     public function profile(Request $request): View
     {
         $user = $request->user();
-        $memberships = $user->memberships()->with('membershipPlan')->validOn(today()->toDateString())->latest('id')->get();
+        $memberships = $user->memberships()->with('membershipPlan.studio')->validOn(today()->toDateString())->latest('id')->get();
 
         return view('user.account.profile', compact('user', 'memberships'));
     }

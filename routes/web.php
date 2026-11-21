@@ -45,6 +45,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [\App\Http\Controllers\User\AccountController::class, 'update'])->name('user.profile.update');
     Route::get('/history', [\App\Http\Controllers\User\AccountController::class, 'history'])->name('user.history');
     Route::get('/memberships', [CustomerMembershipController::class, 'index'])->name('memberships.index');
+    Route::get('/memberships/plans/{membershipPlan}/payment', [CustomerMembershipController::class, 'payment'])->name('memberships.payment');
     Route::post('/memberships', [CustomerMembershipController::class, 'store'])->name('memberships.store');
 });
 

@@ -22,6 +22,8 @@
                 <article class="flex flex-col rounded-2xl border border-white/10 bg-[#171717] p-6">
                     <div class="flex items-start justify-between gap-3"><h3 class="text-xl font-bold">{{ $plan->display_name }}</h3><span class="rounded-full bg-white/10 px-3 py-1 text-xs text-white/60">{{ $plan->status === 'active' ? 'Aktif' : 'Nonaktif' }}</span></div>
                     <p class="mt-6 text-2xl font-bold text-[#f2c83f]">Rp {{ number_format($plan->price, 2, ',', '.') }}</p><p class="mt-1 text-sm text-white/50">Masa berlaku {{ $plan->duration_days }} hari</p>
+                    <p class="mt-2 text-sm text-white/60">Kuota sewa: {{ $plan->quota_hours ? $plan->quota_hours.' jam per '.$plan->duration_days.' hari' : 'Tanpa benefit sewa' }}</p>
+                    <p class="mt-2 text-sm text-white/60">Kuota kelas: {{ !$plan->free_classes ? 'Tanpa benefit kelas' : ($plan->class_quota === null ? 'Tanpa batas' : $plan->class_quota.' kelas per periode') }}</p>
                     <p class="my-5 whitespace-pre-line break-words text-sm leading-6 text-white/60">{{ $plan->description ?: 'Belum ada deskripsi paket.' }}</p>
                     @if($plan->memberships_count > 0)
                         <div class="mb-4 rounded-xl border border-white/10 p-4">

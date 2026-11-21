@@ -31,7 +31,7 @@ class ClassReservationController extends Controller
             ->whereHas('classSchedule', fn ($query) => $query->where('dance_class_id', $danceClass->id))->exists();
         $registeredIds = $alreadyRegistered ? $schedules->pluck('id')->all() : [];
 
-        $classMembership = $request->user()->memberships()->validOn(today()->toDateString())->where('free_classes', true)->first();
+        $classMembership = $request->user()->memberships()->validOn(today()->toDateString())->withClassQuota()->first();
         return view('user.classes.reservation', compact('danceClass', 'schedules', 'registeredIds', 'alreadyRegistered', 'classMembership'));
     }
 
@@ -39,7 +39,7 @@ class ClassReservationController extends Controller
     {
         $this->authorizeCustomer($request);
         $requestedSchedule = $danceClass->classSchedules()->find($request->input('class_schedule_id'));
-        $membershipBenefit = $requestedSchedule && $request->user()->memberships()->validOn($requestedSchedule->date)->where('free_classes', true)->exists();
+        $membershipBenefit = $requestedSchedule && $request->user()->memberships()->validOn($requestedSchedule->date)->withClassQuota()->exists();
         $data = $request->validate([
             'class_schedule_id' => ['required', 'integer', Rule::exists('class_schedules', 'id')->where('dance_class_id', $danceClass->id)],
             'payment_method' => [$membershipBenefit ? 'nullable' : 'required', Rule::in(array_keys(Booking::ONLINE_PAYMENT_METHODS))],
@@ -54,7 +54,7 @@ class ClassReservationController extends Controller
                 \App\Models\User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
                 $schedule = ClassSchedule::where('dance_class_id', $danceClass->id)->lockForUpdate()->findOrFail($data['class_schedule_id']);
                 $schedule->load(['danceClass', 'studio']);
-                $membership = $request->user()->memberships()->validOn($schedule->date)->where('free_classes', true)->lockForUpdate()->first();
+                $membership = $request->user()->memberships()->validOn($schedule->date)->withClassQuota()->lockForUpdate()->first();
                 if (!$membership && empty($proof)) throw ValidationException::withMessages(['payment_proof' => 'Membership tidak berlaku pada tanggal sesi ini. Silakan kirim bukti pembayaran.']);
                 if ($schedule->status !== 'active' || $schedule->danceClass->status !== 'active' || $schedule->studio->status !== 'active'
                     || Carbon::parse($schedule->date.' '.$schedule->start_time)->lte(now())) {
