@@ -18,7 +18,7 @@
             <h2>{{ $user->name }}</h2><p>{{ $user->email }}</p>
             <span class="profile-badge">Orange Dance Academy</span>
             <div class="profile-membership">
-                Membership: <strong>{{ $memberships->isNotEmpty() ? $memberships->map(fn ($membership) => $membership->membershipPlan?->name ?? 'Paket membership')->implode(', ') : 'Tidak ada membership aktif' }}</strong>
+                Membership: <strong>{{ $memberships->isNotEmpty() ? $memberships->map(fn ($membership) => $membership->membershipPlan?->display_name ?? 'Paket membership')->implode(', ') : 'Tidak ada membership aktif' }}</strong>
             </div>
             <a class="profile-history" href="{{ route('user.history') }}">Lihat riwayat booking &rarr;</a>
         </aside>

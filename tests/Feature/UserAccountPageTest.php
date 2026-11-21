@@ -22,18 +22,20 @@ class UserAccountPageTest extends TestCase
         $this->withoutVite();
         $user = User::factory()->create();
         $active = Membership::factory()->create(['user_id' => $user->id, 'status' => 'active', 'payment_status' => 'paid']);
+        $active->membershipPlan->update(['name' => 'Nama paket lama', 'quota_hours' => 20]);
         Membership::factory()->create(['user_id' => $user->id, 'status' => 'expired']);
         Membership::factory()->create(['status' => 'active', 'payment_status' => 'paid']);
 
         $this->actingAs($user)->get(route('user.profile'))->assertOk()
-            ->assertSee($active->membershipPlan->name)
+            ->assertSee($active->membershipPlan->display_name)
+            ->assertDontSee('Nama paket lama')
             ->assertSee('Membership:')
             ->assertViewHas('memberships', fn ($records) => $records->count() === 1 && $records->first()->id === $active->id);
 
         $active->update(['end_date' => today()->subDay()]);
         $this->get(route('user.profile'))->assertOk()
             ->assertSee('Tidak ada membership aktif')
-            ->assertDontSee($active->membershipPlan->name)
+            ->assertDontSee($active->membershipPlan->display_name)
             ->assertViewHas('memberships', fn ($records) => $records->isEmpty());
     }
 

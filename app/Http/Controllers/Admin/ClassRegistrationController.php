@@ -67,7 +67,7 @@ class ClassRegistrationController extends Controller
 
     public function create()
     {
-        $users = User::with(['memberships' => fn ($query) => $query->validOn(today()->toDateString())->where('free_classes', true)])->where('role', 'customer')->where('status', 'active')->orderBy('name')->get();
+        $users = User::with(['memberships' => fn ($query) => $query->validOn(today()->toDateString())->withClassQuota()])->where('role', 'customer')->where('status', 'active')->orderBy('name')->get();
         $schedules = ClassSchedule::with(['danceClass', 'studio'])
             ->withCount(['classRegistrations as occupied' => fn ($q) => $q->where('registration_status', '!=', 'cancelled')])
             ->where('status', 'active')->whereHas('danceClass', fn ($q) => $q->where('status', 'active'))
@@ -82,7 +82,7 @@ class ClassRegistrationController extends Controller
     public function store(Request $request)
     {
         $selectedSchedule = ClassSchedule::find($request->input('class_schedule_id'));
-        $memberBenefit = $selectedSchedule && \App\Models\Membership::where('user_id', $request->input('user_id'))->validOn($selectedSchedule->date)->where('free_classes', true)->exists();
+        $memberBenefit = $selectedSchedule && \App\Models\Membership::where('user_id', $request->input('user_id'))->validOn($selectedSchedule->date)->withClassQuota()->exists();
         $data = $request->validate([
             'user_id' => ['required', Rule::exists('users', 'id')->where('role', 'customer')->where('status', 'active')],
             'class_schedule_id' => ['required', 'exists:class_schedules,id'],
@@ -97,7 +97,7 @@ class ClassRegistrationController extends Controller
             User::whereKey($data['user_id'])->lockForUpdate()->firstOrFail();
             $schedule = ClassSchedule::lockForUpdate()->findOrFail($data['class_schedule_id']);
             $this->ensureAvailable($schedule);
-            $membership = \App\Models\Membership::where('user_id', $data['user_id'])->validOn($schedule->date)->where('free_classes', true)->lockForUpdate()->first();
+            $membership = \App\Models\Membership::where('user_id', $data['user_id'])->validOn($schedule->date)->withClassQuota()->lockForUpdate()->first();
             if (!$membership && $data['payment_method'] !== 'cash' && !$proof) throw ValidationException::withMessages(['payment_proof' => 'Bukti pembayaran wajib untuk customer tanpa benefit membership.']);
             if (ClassRegistration::where('user_id', $data['user_id'])->whereIn('registration_status', ['pending', 'confirmed'])->whereHas('classSchedule', fn ($query) => $query->where('dance_class_id', $schedule->dance_class_id))->exists()) {
                 throw ValidationException::withMessages(['user_id' => 'Peserta masih memiliki reservasi menunggu atau dikonfirmasi pada class ini.']);
@@ -206,7 +206,7 @@ class ClassRegistrationController extends Controller
             }
             $membership = null;
             if ($record->membership_id) {
-                $membership = \App\Models\Membership::where('user_id', $userId)->validOn($target->date)->where('free_classes', true)->lockForUpdate()->first();
+                $membership = \App\Models\Membership::where('user_id', $userId)->validOn($target->date)->withClassQuota($record->id)->lockForUpdate()->first();
                 if (!$membership) throw ValidationException::withMessages(['class_schedule_id' => 'Reservasi gratis hanya bisa dialihkan ke peserta dengan membership aktif pada tanggal jadwal tujuan.']);
             }
             $record->update(['membership_id' => $membership?->id, 'class_schedule_id' => $target->id, 'user_id' => $userId,

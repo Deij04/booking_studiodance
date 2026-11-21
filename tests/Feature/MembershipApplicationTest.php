@@ -6,6 +6,8 @@ use App\Models\Membership;
 use App\Models\MembershipPlan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class MembershipApplicationTest extends TestCase
@@ -16,6 +18,7 @@ class MembershipApplicationTest extends TestCase
     {
         parent::setUp();
         $this->withoutVite();
+        Storage::fake('local');
     }
 
     public function test_customer_applies_as_self_and_admin_can_approve_after_checking_payment(): void
@@ -23,17 +26,20 @@ class MembershipApplicationTest extends TestCase
         $customer = User::factory()->create();
         $other = User::factory()->create();
         $plan = MembershipPlan::factory()->create(['status' => 'active', 'duration_days' => 30, 'price' => 150000]);
-        $this->actingAs($customer)->get(route('memberships.index'))->assertOk()->assertViewIs('user.memberships.index')->assertSee('Daftar Membership');
-        $data = ['membership_plan_id' => $plan->id, 'start_date' => today()->toDateString(), 'user_id' => $other->id, 'price' => 1, 'payment_status' => 'paid', 'status' => 'active'];
+        $this->actingAs($customer)->get(route('memberships.index'))->assertOk()->assertViewIs('user.memberships.index')->assertSee('Lanjut ke Pembayaran');
+        $data = ['payment_proof' => UploadedFile::fake()->create('receipt.pdf', 100, 'application/pdf'), 'membership_plan_id' => $plan->id, 'start_date' => today()->toDateString(), 'user_id' => $other->id, 'price' => 1, 'payment_status' => 'paid', 'status' => 'active'];
         $this->post(route('memberships.store'), $data)->assertSessionHasNoErrors()->assertRedirect(route('memberships.index'));
         $member = Membership::firstOrFail();
         $this->assertSame($customer->id, $member->user_id);
+        Storage::disk('local')->assertExists($member->payment_proof);
         $this->assertSame('150000.00', $member->price);
         $this->assertSame('pending', $member->status);
         $this->assertSame('unpaid', $member->payment_status);
         $this->assertNull($member->start_date);
         $this->assertNull($member->end_date);
+        $data['payment_proof'] = UploadedFile::fake()->create('duplicate.pdf', 100, 'application/pdf');
         $this->post(route('memberships.store'), $data)->assertSessionHasErrors('membership_plan_id');
+        $this->assertCount(1, Storage::disk('local')->allFiles('membership-payment-proofs'));
         $this->actingAs(User::factory()->admin()->create());
         $this->get(route('admin.memberships.index'))->assertOk()->assertSee($customer->email)->assertSee('Verifikasi &amp; Aktifkan', false)->assertSee('Tolak')->assertSee('Tambah Membership');
         $this->patch(route('admin.memberships.decide', $member), ['decision' => 'approve'])->assertSessionHasErrors('payment_confirmed');
@@ -65,7 +71,7 @@ class MembershipApplicationTest extends TestCase
     {
         $customer = User::factory()->create();
         $plan = MembershipPlan::factory()->create(['status' => 'active', 'duration_days' => 30]);
-        $this->actingAs($customer)->post(route('memberships.store'), ['membership_plan_id' => $plan->id])
+        $this->actingAs($customer)->post(route('memberships.store'), ['membership_plan_id' => $plan->id, 'payment_proof' => UploadedFile::fake()->create('receipt.pdf', 100, 'application/pdf')])
             ->assertSessionHasNoErrors();
         $membership = Membership::firstOrFail();
         $this->assertNull($membership->start_date);

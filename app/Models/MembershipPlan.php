@@ -10,7 +10,7 @@ class MembershipPlan extends Model
     use HasFactory, \Illuminate\Database\Eloquent\SoftDeletes;
 
     protected $fillable = [
-        'name', 'studio_id', 'quota_hours', 'free_classes',
+        'name', 'studio_id', 'quota_hours', 'free_classes', 'class_quota',
         'price',
         'duration_days',
         'description',
@@ -20,7 +20,7 @@ class MembershipPlan extends Model
     protected function casts(): array
     {
         return [
-            'price' => 'decimal:2', 'free_classes' => 'boolean', 'quota_hours' => 'integer',
+            'price' => 'decimal:2', 'free_classes' => 'boolean', 'quota_hours' => 'integer', 'class_quota' => 'integer',
         ];
     }
 

@@ -1,5 +1,6 @@
 @if($membership->status === 'pending')
     <div class="flex flex-wrap items-center gap-4">
+        @if($membership->payment_proof)<a href="{{ route('admin.memberships.payment-proof', $membership) }}" target="_blank" rel="noopener" class="text-sm text-[#f2c83f] underline">Periksa bukti pembayaran</a>@endif
         <form data-membership-decision method="POST" action="{{ route('admin.memberships.decide', $membership) }}" class="flex flex-wrap items-center gap-3">
             @csrf
             @method('PATCH')

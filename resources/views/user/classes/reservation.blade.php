@@ -3,7 +3,7 @@
 @section('content')
 <main class="reservation-page">
     <header class="reservation-heading"><h1 data-class-heading>Choose Your Session</h1><p>{{ $danceClass->name }} &middot; Rp {{ number_format($danceClass->price, 0, ',', '.') }} / session</p></header>
-    @if($classMembership)<p class="reservation-errors" style="border-color:#b99a2b;color:#e8cf70">Member aktif: class gratis untuk sesi dalam periode membership. Tetap pilih jadwal yang tersedia.</p>@endif
+    @if($classMembership)<p class="reservation-errors" style="border-color:#b99a2b;color:#e8cf70">Member aktif: class gratis untuk sesi dalam periode membership. Sisa kuota: {{ $classMembership->remaining_classes === null ? 'tanpa batas' : $classMembership->remaining_classes.' kelas' }}. Tetap pilih jadwal yang tersedia.</p>@endif
     @if($alreadyRegistered)<p class="reservation-errors" role="alert">Anda sudah memiliki reservasi pada class ini yang menunggu atau dikonfirmasi. Tidak dapat mendaftar lagi pada jadwal lain.</p>@endif
     <form data-class-reservation data-price="{{ $danceClass->price }}" data-member-start="{{ $classMembership?->start_date?->toDateString() }}" data-member-end="{{ $classMembership?->end_date?->toDateString() }}" data-resume="{{ $errors->any() && old('class_schedule_id') ? 'payment' : 'sessions' }}" action="{{ route('user.classes.store', $danceClass) }}" method="POST" enctype="multipart/form-data">
         @csrf

@@ -59,7 +59,7 @@
                     <li>Studio: {{ $plan->studio?->name ?? 'Semua studio aktif' }}</li>
                     @if($plan->studio && $plan->quota_hours && $plan->studio->price_per_hour * $plan->quota_hours > $plan->price)<li>Hemat Rp {{ number_format($plan->studio->price_per_hour * $plan->quota_hours - $plan->price, 0, ',', '.') }} dibanding tarif reguler untuk {{ $plan->quota_hours }} jam.</li>@endif
                     @if($plan->quota_hours)<li>Kuota {{ $plan->quota_hours }} jam sewa studio per periode; pilih jadwal yang tersedia.</li><li>Sisa kuota hangus setelah periode berakhir.</li>@endif
-                    @if($plan->free_classes)<li>Gratis daftar dance class selama membership aktif, sesuai jadwal dan kapasitas.</li>@endif
+                    @if($plan->free_classes)<li>{{ $plan->class_quota === null ? 'Gratis dance class tanpa batas' : 'Kuota '.$plan->class_quota.' kelas gratis per periode' }}, sesuai jadwal dan kapasitas.</li>@endif
                     @if($plan->description)
                         @foreach(preg_split('/\r\n|\r|\n/', __($plan->description)) as $benefit)
                             @if(trim($benefit) !== '')<li>{{ $benefit }}</li>@endif
@@ -69,24 +69,21 @@
                     @endif
                     <li>Valid for {{ $plan->duration_days }} days from admin approval.</li>
                 </ul>
-                <form method="POST" action="{{ route('memberships.store') }}">
-                    @csrf
-                    <input type="hidden" name="membership_plan_id" value="{{ $plan->id }}">
-                    <button data-save-confirm class="membership-book" type="submit">Daftar Membership</button>
-                </form>
+                <a href="{{ route('memberships.payment', $plan) }}" class="membership-book" style="box-sizing:border-box;text-align:center;text-decoration:none;margin-top:auto">Lanjut ke Pembayaran</a>
             </article>
         @empty
             <p>No membership plans are currently available.</p>
         @endforelse
     </div>
     <section class="membership-history" aria-label="Membership application history">
-    <p class="membership-history-intro">Choose a plan, submit your application, and contact our team for payment. Your membership starts on the day our team verifies your payment and approves your application.</p>
+    <p class="membership-history-intro">Choose a plan, complete payment, and upload your payment proof to submit your application. Your membership starts on the day our team verifies your payment and approves your application.</p>
     <h2>Application History</h2>
     <p class="membership-history-intro">Start and end dates are assigned upon approval. The end date is included in your membership period.</p>
     @forelse($memberships as $membership)
         <article class="membership-history-card">
             <h3>{{ $membership->membershipPlan->display_name }}</h3>
             <p class="small">@if($membership->start_date && $membership->end_date){{ $membership->start_date->format('d/m/Y') }} &ndash; {{ $membership->end_date->format('d/m/Y') }}@else Dates assigned upon approval @endif &middot; Rp {{ number_format($membership->price, 2, ',', '.') }}</p>
+            @if($membership->free_classes)<p class="small">Sisa kuota kelas: <strong>{{ $membership->remaining_classes === null ? 'Tanpa batas' : $membership->remaining_classes.' dari '.$membership->class_quota.' kelas' }}</strong>.</p>@endif
             @if($membership->quota_minutes)<p class="small">Sisa kuota studio: <strong>{{ number_format($membership->remaining_minutes / 60, 1, ',', '.') }} jam</strong> dari {{ $membership->quota_minutes / 60 }} jam.</p>@endif
             <p class="small"><strong>{{ $membership->effective_status === 'cancelled' ? 'Rejected / Cancelled' : (['pending' => 'Pending', 'active' => 'Active', 'expired' => 'Expired', 'cancelled' => 'Cancelled'][$membership->effective_status] ?? ucfirst($membership->effective_status)) }}</strong> &middot; {{ $membership->payment_status === 'paid' ? 'Paid' : 'Unpaid' }}</p>
         </article>
